@@ -1,0 +1,75 @@
+name: Conformance drift
+description: A repo has fallen out of conformance with the DES. Usually filed by the org conformance workflow.
+labels: ["conformance-drift"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The scheduled org conformance workflow files these automatically (DES §12).
+        File one by hand if you spot drift before the audit does.
+
+  - type: input
+    id: repo
+    attributes:
+      label: Repo
+      description: The repo that has drifted, as owner/name.
+      placeholder: datumlabsio/example-pipeline
+    validations:
+      required: true
+
+  - type: dropdown
+    id: archetype
+    attributes:
+      label: Archetype
+      options:
+        - dlt-pipeline
+        - dagster-user-code
+        - dbt-project
+        - application
+        - web-app
+        - docs
+        - not declared
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: failed
+    attributes:
+      label: Which checks failed
+      description: From the DES §12 checklist.
+      options:
+        - label: Born from current scaffold; archetype declared
+        - label: CLAUDE.md, README and CODEOWNERS present
+        - label: Branch protection per phase policy
+        - label: CI is a pinned thin caller; stages green
+        - label: Linters pass on pinned configs
+        - label: Security baseline active
+        - label: AI first-pass review enabled
+        - label: Pre-commit config present; CI runs the same hooks
+        - label: SemVer release cut by CI; no tag moved
+        - label: docs/ present where the archetype requires it
+        - label: Bots cannot approve; agent credentials read-only
+        - label: AI review workflow declares block-vs-comment scope
+        - label: Rollback command in the README
+        - label: Coverage on changed lines; total not falling
+        - label: dbt model tests / dlt schema tests on changed work
+        - label: No disabled test past its fix-or-delete date
+    validations:
+      required: true
+
+  - type: input
+    id: owner
+    attributes:
+      label: Owning crew
+      description: The team named in the repo's CODEOWNERS.
+      placeholder: "@datumlabsio/core"
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: Detail
+      description: What the audit saw. Paste the run output if there is one.
+    validations:
+      required: false

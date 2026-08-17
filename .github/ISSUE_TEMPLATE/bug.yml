@@ -1,0 +1,62 @@
+name: Bug
+description: Something is broken or behaving wrongly
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, not what you think caused it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: Steps, or the command you ran. If it only happens sometimes, say that — it changes how we look for it.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: archetype
+    attributes:
+      label: Repo archetype
+      description: If you are not sure, check the repo's CLAUDE.md.
+      options:
+        - dlt-pipeline
+        - dagster-user-code
+        - dbt-project
+        - application
+        - web-app
+        - docs
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Who is affected
+      options:
+        - A client install is affected
+        - Internal only
+        - Not sure yet
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste the relevant part. Check it for secrets first.
+      render: shell
+    validations:
+      required: false
