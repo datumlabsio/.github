@@ -1,0 +1,7 @@
+# Owners of this repo. A change here shows up in every repo that has no
+# file of its own, so it gets a real review.
+#
+# GitHub does not inherit CODEOWNERS from this repo. Every repo needs its
+# own. A team only counts as an owner if it has write access to that repo.
+
+* @datumlabsio/core

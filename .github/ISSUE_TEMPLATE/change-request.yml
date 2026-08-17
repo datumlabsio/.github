@@ -1,0 +1,45 @@
+name: Change request
+description: Something should work differently, or does not exist yet
+labels: ["change-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this would change a **rule** — what a standard requires — it is an RFC, not an issue.
+        See [datum-standards/CONTRIBUTING.md](https://github.com/datumlabsio/datum-standards/blob/main/CONTRIBUTING.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem
+      description: The problem, not the solution. What is hard or slow or wrong today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: who
+    attributes:
+      label: Who is hitting this
+      description: A crew, a client install, a role. If it is only you so far, that is fine — say so.
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: What would done look like
+      description: How we would know this is finished.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      description: High means architecture, data logic, client-facing output, security, pricing, or production code. High-risk work needs independent review (DWM §3).
+      options:
+        - low
+        - high
+        - not sure
+    validations:
+      required: true
