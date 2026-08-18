@@ -49,5 +49,5 @@ EOF
 
 ## Docs
 
-- Conventions this repo will document for other repos — CODEOWNERS conventions, branch protection, bot identities, AI review scope — land in `docs/` in a follow-up PR. Not present yet.
+- Conventions this repo documents for other repos: [`docs/`](docs/) — CODEOWNERS conventions, branch protection, bot identities, AI review scope.
 - The standards themselves: [datumlabsio/datum-standards](https://github.com/datumlabsio/datum-standards) — start at its README.
