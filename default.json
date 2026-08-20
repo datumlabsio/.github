@@ -90,6 +90,18 @@
 
   "customManagers": [
     {
+      "description": [
+        "scaffolds/copier.yml pins actions_version, and since it stopped being a question anyone answers, that single value decides which CI version EVERY new repo is born on.",
+        "No built-in manager can see it. It is not a uses: line, and the uses: lines in the templates interpolate {{ actions_version }}, which the github-actions manager cannot parse. So the comment above the pin — 'it is bumped in datumlabsio/actions and arrives everywhere as a reviewable Renovate pull request' — was not true until this manager existed.",
+        "depName is datumlabsio/actions deliberately, so the packageRule for datumlabsio/** applies: its own pull request, no grouping, and no weekly window."
+      ],
+      "customType": "regex",
+      "fileMatch": ["(^|/)copier\\.yml$"],
+      "matchStrings": ["actions_version:[\\s\\S]{0,120}?default:\\s*(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "depNameTemplate": "datumlabsio/actions",
+      "datasourceTemplate": "github-releases"
+    },
+    {
       "description": "Python pins, ruff==0.16.3. Renovate has no manager for a bare requirement list under a custom filename, so the format is matched directly.",
       "customType": "regex",
       "fileMatch": ["(^|/)tool-versions\\.txt$", "(^|/)dbt-tool-versions\\.txt$"],
