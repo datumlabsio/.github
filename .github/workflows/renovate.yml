@@ -1,0 +1,61 @@
+name: renovate
+
+# The org's dependency updates. One scheduled caller for the whole fleet, rather
+# than a workflow in every repo — a repo opts in by carrying renovate.json, which
+# its scaffold writes at birth.
+#
+# The policy is in default.json alongside this file. This only decides WHEN.
+#
+# Monday morning rather than continuously: a bump that arrives on a Monday gets
+# read, and one that arrives all week gets muted. A muted queue is the same as no
+# Renovate at all.
+#
+# datumlabsio/actions bumps ignore this schedule by design — default.json gives
+# them `schedule: at any time`, because that pull request is the path a CI gate
+# fix travels to every repo.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+
+  # For "I do not want to wait until Monday", and for the first run after the
+  # token lands.
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Resolve and log everything, open nothing."
+        type: boolean
+        default: false
+      log-level:
+        description: "debug when working out why a repo was skipped."
+        type: string
+        default: "info"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two Renovates writing to the same repos race and open duplicate branches. A
+  # long weekly run overlapping a manual one is exactly how that happens.
+  group: renovate-org
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    # v0.6.0 rather than the newest tag on purpose: it is the version that
+    # actually contains this workflow. The token guard lands in v0.7.0, and
+    # Renovate will raise this pin itself — default.json gives datumlabsio/**
+    # its own pull request with no weekly delay, which is the mechanism working
+    # on its own machinery.
+    #
+    # The first cron is Monday 04:00, so the guard arrives days before anything
+    # is scheduled to run.
+    uses: datumlabsio/actions/.github/workflows/renovate.yml@v0.6.0
+    with:
+      dry-run: ${{ inputs.dry-run || false }}
+      log-level: ${{ inputs.log-level || 'info' }}
+    secrets:
+      # Belongs to the bot identity, not a person — DES §7. Until the secret
+      # exists the called workflow logs a notice and exits green, so scheduled
+      # runs stay quiet rather than failing with a bare auth error.
+      renovate-token: ${{ secrets.RENOVATE_TOKEN }}
