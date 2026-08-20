@@ -29,6 +29,7 @@ A repo with its own version of any of these keeps its own. The default only fill
 **Not served anywhere.** These live here for this repo only, or as documentation:
 
 - `CODEOWNERS` — GitHub reads this per repo. It cannot be inherited. Every repo needs its own; the convention is in [`docs/codeowners-conventions.md`](docs/codeowners-conventions.md).
+- `default.json` — the org-wide Renovate preset. Not served automatically either: a repo opts in with a three-line `renovate.json` that extends it, which its scaffold writes at birth. See [`docs/renovate.md`](docs/renovate.md).
 - `CLAUDE.md` — not part of GitHub's default-file mechanism. Each repo carries its own, provided by its scaffold.
 - Workflows — a repo gets CI by calling `datumlabsio/actions`, not from here.
 - Linter and tool configs — those live in `datumlabsio/actions`.

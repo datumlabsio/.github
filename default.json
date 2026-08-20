@@ -1,0 +1,165 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  "description": [
+    "The org-wide Renovate preset. Every repo extends this rather than configuring its own rules, for the same reason CI is a thin caller: a policy fixed here is fixed everywhere on the next run.",
+    "Renovate is the mechanism DES §2 actually relies on. 'Fix a gate once and every repo inherits it' is only true if something opens the bump pull request in each repo — without this, a release in datumlabsio/actions reaches nothing."
+  ],
+
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+
+  "timezone": "Asia/Karachi",
+  "schedule": ["before 9am on monday"],
+
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 0,
+
+  "github-actions": {
+    "description": "DES §4: third-party actions are pinned by commit SHA, never by tag. Renovate keeps the SHA current and the trailing version comment readable.",
+    "pinDigests": true
+  },
+
+  "vulnerabilityAlerts": {
+    "description": "A security fix bypasses the weekly window, and is typed fix so it cuts a patch release rather than sitting unreleased.",
+    "enabled": true,
+    "schedule": ["at any time"],
+    "semanticCommitType": "fix",
+    "labels": ["security"]
+  },
+
+  "packageRules": [
+    {
+      "description": "The org's own reusable workflows. This is the path a gate fix travels, so it gets its own pull request, is never grouped with anything else, and is never held to the weekly window. pinDigests is off because DES §4 requires an exact VERSION tag here, not a SHA — a SHA cannot be read as 'which release am I on'.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["datumlabsio/**"],
+      "groupName": "datumlabsio actions",
+      "schedule": ["at any time"],
+      "prPriority": 5,
+      "labels": ["datum-actions"],
+      "pinDigests": false
+    },
+    {
+      "description": "Third-party actions, grouped. SHA-pinned, so each bump is a one-line diff plus its comment.",
+      "matchManagers": ["github-actions"],
+      "excludePackageNames": ["datumlabsio/**"],
+      "groupName": "third-party actions"
+    },
+    {
+      "description": "Vendored tool pins move together per surface. Bumping ruff without mypy leaves a repo running a combination nothing was ever tested against.",
+      "matchFileNames": ["**/tool-versions.txt", "**/dbt-tool-versions.txt"],
+      "groupName": "python tool pins"
+    },
+    {
+      "matchFileNames": ["**/web-tool-versions.txt"],
+      "groupName": "web tool pins"
+    },
+    {
+      "matchFileNames": ["**/gitops-tool-versions.txt"],
+      "groupName": "gitops tool pins"
+    },
+    {
+      "description": "pnpm refuses packages published inside its minimumReleaseAge, and a range resolving to a just-published patch is then rejected — so a same-day bump lands a lockfile CI cannot install. Waiting here is correctness, not caution.",
+      "matchManagers": ["npm"],
+      "minimumReleaseAge": "10 days"
+    },
+    {
+      "description": "A compiler major is not a decision Renovate should make for the fleet. TypeScript 7 is a native rewrite and the ecosystem lags it. Majors arrive as a dashboard entry to approve.",
+      "matchPackageNames": ["typescript", "node"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Same for a major on any vendored linter: passing the pinned linter IS conformance (DES §5), so a major that changes rules changes what conformance means in every repo at once.",
+      "matchFileNames": [
+        "**/tool-versions.txt",
+        "**/dbt-tool-versions.txt",
+        "**/web-tool-versions.txt",
+        "**/gitops-tool-versions.txt"
+      ],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ],
+
+  "customManagers": [
+    {
+      "description": "Python pins, ruff==0.16.3. Renovate has no manager for a bare requirement list under a custom filename, so the format is matched directly.",
+      "customType": "regex",
+      "fileMatch": ["(^|/)tool-versions\\.txt$", "(^|/)dbt-tool-versions\\.txt$"],
+      "matchStrings": ["(?<depName>[a-z0-9][a-z0-9._-]*)==(?<currentValue>[0-9][^\\s]*)"],
+      "datasourceTemplate": "pypi"
+    },
+    {
+      "description": "node has its own datasource — the npm package called node is not the runtime.",
+      "customType": "regex",
+      "fileMatch": ["(^|/)web-tool-versions\\.txt$"],
+      "matchStrings": ["node=(?<currentValue>[0-9][^\\s]*)"],
+      "depNameTemplate": "node",
+      "datasourceTemplate": "node-version"
+    },
+    {
+      "description": "biome is published as @biomejs/biome; the pin uses the short name a human types.",
+      "customType": "regex",
+      "fileMatch": ["(^|/)web-tool-versions\\.txt$"],
+      "matchStrings": ["biome=(?<currentValue>[0-9][^\\s]*)"],
+      "depNameTemplate": "biome",
+      "packageNameTemplate": "@biomejs/biome",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)web-tool-versions\\.txt$"],
+      "matchStrings": ["(?<depName>pnpm|typescript|vitest)=(?<currentValue>[0-9][^\\s]*)"],
+      "datasourceTemplate": "npm"
+    },
+    {
+      "description": "gitops tools ship as GitHub releases, and each short name maps to a different repository. kustomize tags its releases kustomize/vX.Y.Z, so the version has to be extracted from the tag.",
+      "customType": "regex",
+      "fileMatch": ["(^|/)gitops-tool-versions\\.txt$"],
+      "matchStrings": ["kustomize=(?<currentValue>v[0-9][^\\s]*)"],
+      "depNameTemplate": "kustomize",
+      "packageNameTemplate": "kubernetes-sigs/kustomize",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^kustomize/(?<version>v.+)$"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)gitops-tool-versions\\.txt$"],
+      "matchStrings": ["kubeconform=(?<currentValue>v[0-9][^\\s]*)"],
+      "depNameTemplate": "kubeconform",
+      "packageNameTemplate": "yannh/kubeconform",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)gitops-tool-versions\\.txt$"],
+      "matchStrings": ["helm=(?<currentValue>v[0-9][^\\s]*)"],
+      "depNameTemplate": "helm",
+      "packageNameTemplate": "helm/helm",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)gitops-tool-versions\\.txt$"],
+      "matchStrings": ["flux=(?<currentValue>v[0-9][^\\s]*)"],
+      "depNameTemplate": "flux",
+      "packageNameTemplate": "fluxcd/flux2",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "yamllint is on PyPI despite living with the gitops pins.",
+      "customType": "regex",
+      "fileMatch": ["(^|/)gitops-tool-versions\\.txt$"],
+      "matchStrings": ["yamllint=(?<currentValue>[0-9][^\\s]*)"],
+      "depNameTemplate": "yamllint",
+      "datasourceTemplate": "pypi"
+    }
+  ]
+}
