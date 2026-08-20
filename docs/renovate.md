@@ -7,7 +7,12 @@ DES §2 says: fix a gate once in `datumlabsio/actions` and every repo inherits i
 | Where | What |
 |---|---|
 | `datumlabsio/.github` → `default.json` | The org preset. Every rule lives here. |
+| `datumlabsio/.github` → `.github/workflows/renovate.yml` | The one scheduled caller for the whole fleet. Decides *when*, nothing else. |
 | every repo → `renovate.json` | Three lines: `extends: ["local>datumlabsio/.github"]` |
+
+**Self-hosted, not the Mend app.** The hosted app was tried and does not scan private repos — it picked up both public repos within nine minutes and never touched `scaffolds`. 223 of the org's 228 repos are private, so it reached two repos and none of the ones client work will live in. Full reasoning in [`actions/docs/renovate.md`](https://github.com/datumlabsio/actions/blob/main/docs/renovate.md).
+
+**One caller, not one per repo.** A repo opts in by carrying `renovate.json`, and `requireConfig: required` means repos without it are skipped. So there is no allowlist to maintain and no workflow to copy around.
 
 A repo does not configure Renovate. It inherits, the same way its CI inherits — so a policy change is one pull request here rather than 200.
 
