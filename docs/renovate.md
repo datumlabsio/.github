@@ -45,6 +45,8 @@ Renovate has no built-in manager for a bare `name=version` list under a filename
 | `web-tool-versions.txt` | `pnpm=11.22.0` | npm — except `node`, which has its own datasource, and `biome`, which publishes as `@biomejs/biome` |
 | `gitops-tool-versions.txt` | `kustomize=v5.8.1` | GitHub releases — except `yamllint`, which is on PyPI |
 
+**`scaffolds/copier.yml` needed a manager of its own.** It pins `actions_version`, and since that stopped being a question anyone answers, the single value decides which CI version *every new repo is born on*. No built-in manager can see it: it is not a `uses:` line, and the `uses:` lines inside the templates interpolate `{{ actions_version }}`, which the github-actions manager cannot parse. The comment above the pin claimed the version "arrives everywhere as a reviewable Renovate pull request" — untrue until this manager existed. Its `depName` is set to `datumlabsio/actions` deliberately, so the `datumlabsio/**` rule applies and the bump gets its own pull request with no weekly delay.
+
 **kustomize needed special handling.** It tags releases as `kustomize/v5.8.1` in a repo that also tags `kyaml/`, `api/` and `cmd/config/`. Without `extractVersionTemplate` Renovate would cheerfully "upgrade" kustomize to `kyaml/v0.21.1`.
 
 ## Changing a rule
