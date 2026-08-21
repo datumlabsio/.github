@@ -14,7 +14,29 @@ Every automation gets a row here before it gets access.
 
 | Identity | Used by | May do | Owner |
 |---|---|---|---|
-| *(to be filled as each is provisioned)* | | | |
+| **`datum-police`** (GitHub App, installation `155450559`) | `renovate.yml` in this repo. Later: the conformance audit (§12) and the `main` watcher. | Push branches and open pull requests on the repos it is installed on. Read and write issues, for the Dependency Dashboard. | @humayun-1 |
+
+**`datum-police` in detail.** A GitHub App rather than a machine user, so it is
+its own identity and not a seat. Credentials are `DATUM_POLICE_APP_ID` and
+`DATUM_POLICE_PRIVATE_KEY`, held as **organisation** secrets scoped to selected
+repositories — org-level because the audit and the watcher will need the same
+identity from other repos, and rotating a key in one place beats three.
+
+**The token is minted per run and revoked when the job ends.** Nothing long-lived
+is stored: an App id and a private key are useless without the installation. That
+is the practical reason to prefer an App over a personal access token, beyond the
+rule below.
+
+**What it may not do.** It has no `main` access anywhere — every repo it touches
+has a ruleset blocking direct pushes and requiring a pull request. It holds no
+production credentials. It cannot approve: agents draft, a person approves.
+
+**One caveat, recorded rather than hidden.** Our rulesets currently require **0**
+approvals, in draft phase. So nothing *structurally* stops this identity merging a
+pull request it opened — the only reason it does not is that `default.json` never
+sets `automerge`. That is a configuration choice, not a guardrail, and the "a bot
+review never counts as an approval" rule below is vacuous until the approval count
+is 1. Worth revisiting when a repo moves to production phase.
 
 An automation that is not in this table should not have credentials. If you find one, that is a finding, not a shortcut somebody took for good reasons.
 

@@ -42,20 +42,14 @@ concurrency:
 
 jobs:
   renovate:
-    # v0.6.0 rather than the newest tag on purpose: it is the version that
-    # actually contains this workflow. The token guard lands in v0.7.0, and
-    # Renovate will raise this pin itself — default.json gives datumlabsio/**
-    # its own pull request with no weekly delay, which is the mechanism working
-    # on its own machinery.
-    #
-    # The first cron is Monday 04:00, so the guard arrives days before anything
-    # is scheduled to run.
-    uses: datumlabsio/actions/.github/workflows/renovate.yml@v0.6.0
+    uses: datumlabsio/actions/.github/workflows/renovate.yml@v0.10.0
     with:
       dry-run: ${{ inputs.dry-run || false }}
       log-level: ${{ inputs.log-level || 'info' }}
     secrets:
-      # Belongs to the bot identity, not a person — DES §7. Until the secret
-      # exists the called workflow logs a notice and exits green, so scheduled
-      # runs stay quiet rather than failing with a bare auth error.
-      renovate-token: ${{ secrets.RENOVATE_TOKEN }}
+      # datum-police, a GitHub App — DES §7 and docs/bot-identities.md: an
+      # automation gets its own app, not a person's token. The workflow mints a
+      # short-lived token from these and revokes it when the job ends, so nothing
+      # long-lived is stored anywhere.
+      app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+      private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
