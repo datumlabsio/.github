@@ -9,10 +9,12 @@ name: ci
 # was validated by hand, including confirming that renovate.yml existed at the
 # version being pinned. That is exactly the work workflows-ci does.
 
+# Pull requests only. A push run on main cannot work: an archetype wrapper calls
+# its stages by relative reference, and a cross-repository nested call resolves on
+# a pull request but dies at startup on a push — no jobs, no log. main is
+# protected, so nothing reaches it except through a green pull request anyway.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
