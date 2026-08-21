@@ -23,7 +23,7 @@ jobs:
   # The prose half. 13 markdown files, and README plus CONTRIBUTING are what a
   # new engineer reads first.
   docs:
-    uses: datumlabsio/actions/.github/workflows/docs.yml@v0.9.1
+    uses: datumlabsio/actions/.github/workflows/docs.yml@v0.10.0
     with:
       link-check: true
       commit-lint: true
@@ -43,4 +43,4 @@ jobs:
   # pin resolves and declares what it is passed, and default.json plus
   # renovate.json actually parse as Renovate config at the major that runs.
   workflows:
-    uses: datumlabsio/actions/.github/workflows/workflows-ci.yml@v0.9.1
+    uses: datumlabsio/actions/.github/workflows/workflows-ci.yml@v0.10.0
