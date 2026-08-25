@@ -30,6 +30,7 @@ A repo with its own version of any of these keeps its own. The default only fill
 
 - `CODEOWNERS` — GitHub reads this per repo. It cannot be inherited. Every repo needs its own; the convention is in [`docs/codeowners-conventions.md`](docs/codeowners-conventions.md).
 - `.github/workflows/ci.yml` — this repo's own CI. A thin caller: `docs-ci` for the prose, `workflows-ci` for the automation. It validates `default.json` on every pull request, lints the workflows, and confirms its own pins resolve — all of which used to be done by hand.
+- `.github/workflows/conformance-audit.yml` — the scheduled §12 audit. Report-only until B-30 settles which repos the standard binds. What to do when a finding lands: [`docs/conformance-drift.md`](docs/conformance-drift.md).
 - `default.json` — the org-wide Renovate preset. Not served automatically either: a repo opts in with a three-line `renovate.json` that extends it, which its scaffold writes at birth. See [`docs/renovate.md`](docs/renovate.md).
 - `CLAUDE.md` — not part of GitHub's default-file mechanism. Each repo carries its own, provided by its scaffold.
 - Workflows — a repo gets CI by calling `datumlabsio/actions`, not from here.

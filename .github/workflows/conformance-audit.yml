@@ -1,0 +1,57 @@
+name: conformance-audit
+
+# DES §12: a scheduled audit of every repo the standard binds, with drift opening
+# an issue against the owning crew.
+#
+# REPORT-ONLY FOR NOW, on purpose. `dry-run: true` means this prints findings and
+# files nothing. Two things have to happen before it files for real:
+#
+#   1. B-30 — which repos the standard binds. The list below is the machinery
+#      repos only, because those are the ones nobody disputes. Widening it is a
+#      decision, not a workflow change.
+#   2. A human reads a full run and agrees the findings are real. The first run
+#      that files for real opens an issue against every non-conforming repo at
+#      once, and a false positive arriving 200 times is not recoverable — people
+#      mute the label and it never gets unmuted.
+#
+# Flipping it is a one-line change to `dry-run`, deliberately.
+
+on:
+  schedule:
+    # Monday, after Renovate. A conformance report that lands with the week's
+    # dependency PRs is read at the same time as them.
+    - cron: "0 6 * * 1"
+
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: "Override the audited list, space-separated owner/repo."
+        type: string
+        default: ""
+      dry-run:
+        description: "Leave true to report without filing."
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    uses: datumlabsio/actions/.github/workflows/conformance-audit.yml@v0.14.0
+    permissions:
+      contents: read
+      issues: write
+    with:
+      # The machinery repos. Explicit rather than autodiscovered: which repos the
+      # standard binds is B-30's decision, and a workflow that guesses answers a
+      # question nobody has been asked.
+      repos: ${{ inputs.repos || 'datumlabsio/actions datumlabsio/scaffolds datumlabsio/.github datumlabsio/datum-standards datumlabsio/polaris' }}
+      dry-run: ${{ inputs.dry-run == null && true || inputs.dry-run }}
+    secrets:
+      app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+      private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
