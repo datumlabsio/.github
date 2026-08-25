@@ -3,16 +3,18 @@ name: conformance-audit
 # DES §12: a scheduled audit of every repo the standard binds, with drift opening
 # an issue against the owning crew.
 #
-# REPORT-ONLY FOR NOW, on purpose. `dry-run: true` means this prints findings and
-# files nothing. Two things have to happen before it files for real:
+# ONE REPO, ON PURPOSE. The standard is being proved on `polaris` first: make it
+# the repo you can show another team and say "this is how it works". Other repos
+# adopt afterwards, one at a time, and each joins this list as it does.
 #
-#   1. B-30 — which repos the standard binds. The list below is the machinery
-#      repos only, because those are the ones nobody disputes. Widening it is a
-#      decision, not a workflow change.
-#   2. A human reads a full run and agrees the findings are real. The first run
-#      that files for real opens an issue against every non-conforming repo at
-#      once, and a false positive arriving 200 times is not recoverable — people
-#      mute the label and it never gets unmuted.
+# The machinery repos — actions, scaffolds, .github — are deliberately NOT here.
+# They build the standard rather than being examples of it, and `actions` cannot
+# ever satisfy "born from a scaffold" because it is the thing scaffolds call. A
+# finding nobody can act on is a finding everybody learns to scroll past, and it
+# takes the real ones with it.
+#
+# STILL REPORT-ONLY. `dry-run: true` prints findings and files nothing, until a
+# human has read a full run and agreed the findings are real.
 #
 # Flipping it is a one-line change to `dry-run`, deliberately.
 
@@ -47,10 +49,10 @@ jobs:
       contents: read
       issues: write
     with:
-      # The machinery repos. Explicit rather than autodiscovered: which repos the
-      # standard binds is B-30's decision, and a workflow that guesses answers a
-      # question nobody has been asked.
-      repos: ${{ inputs.repos || 'datumlabsio/actions datumlabsio/scaffolds datumlabsio/.github datumlabsio/datum-standards datumlabsio/polaris' }}
+      # Explicit rather than autodiscovered. A repo joins this list when it
+      # adopts the standard, which is a decision somebody makes rather than
+      # something a workflow infers.
+      repos: ${{ inputs.repos || 'datumlabsio/polaris' }}
       dry-run: ${{ inputs.dry-run == null && true || inputs.dry-run }}
     secrets:
       app-id: ${{ secrets.DATUM_POLICE_APP_ID }}

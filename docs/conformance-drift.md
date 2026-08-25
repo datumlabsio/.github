@@ -4,6 +4,15 @@ The scheduled audit (DES §12) filed it. It found something about your repo that
 does not match the standard, and it named your crew because your `CODEOWNERS`
 does.
 
+## Which repos this runs against
+
+`polaris` only, today. The standard is being proved there first — make it the
+repo you can show another team and say *this is how it works* — and other repos
+join the list as they adopt, one at a time.
+
+If your repo is not on the list, the audit is not watching it and you will never
+get one of these. That is deliberate, not an oversight.
+
 ## First: it is about the repo's setup, not your code
 
 The audit looks at what is observable from **outside** a repo — its settings,
