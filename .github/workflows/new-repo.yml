@@ -21,6 +21,26 @@ permissions:
   issues: write
 
 jobs:
+  # Deliberately NOT in the repo-creation environment. This has to fire BEFORE
+  # the approval, or nobody knows there is anything to approve — the request
+  # would sit waiting on somebody who has not been told.
+  #
+  # `create` does not depend on this: a repository request must not be blocked
+  # because a Slack webhook is missing.
+  announce:
+    if: github.event.label.name == 'repo-request'
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v0.23.0
+    with:
+      summary: "${{ github.event.issue.user.login }} requested a repository"
+      detail: >-
+        *${{ github.event.issue.title }}*
+
+        Needs approval before anything is created.
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      severity: warn
+    secrets:
+      webhook: ${{ secrets.SLACK_ALERTS_WEBHOOK }}
+
   create:
     # The label is applied by a person, so the trigger is already a decision.
     if: github.event.label.name == 'repo-request'
@@ -120,9 +140,20 @@ jobs:
 
           gh api -X POST "orgs/$OWNER/repos" \
             -f name="$NAME" -f description="$DESCRIPTION" -F private=true \
-            -F has_issues=true -F has_wiki=false -F has_projects=false \
-            -F delete_branch_on_merge=true >/dev/null
+            -F has_issues=true -F has_wiki=false -F has_projects=false >/dev/null
           echo "created $OWNER/$NAME"
+
+          # `delete_branch_on_merge` is accepted by the create endpoint and
+          # silently ignored — the first real run produced a repository with it
+          # false, having asked for true. Set it afterwards, then read it back:
+          # a setting that quietly did not apply is worse than one never asked
+          # for, because the repository looks configured.
+          gh api -X PATCH "repos/$OWNER/$NAME" -F delete_branch_on_merge=true >/dev/null
+          got=$(gh api "repos/$OWNER/$NAME" -q .delete_branch_on_merge)
+          if [ "$got" != "true" ]; then
+            echo "::error::delete_branch_on_merge is '$got' after being set. The repository is not configured as intended."
+            exit 1
+          fi
 
           cd "$RUNNER_TEMP/repo"
           git init -q -b main
