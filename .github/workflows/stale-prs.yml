@@ -1,0 +1,102 @@
+name: stale-prs
+
+# A correct fix sitting unmerged is indistinguishable from a fix that does not
+# exist, and it gets more dangerous the longer it sits (B-61).
+#
+# actions#25 was opened on 24 Aug and was still open on the 27th. In that window:
+# polaris#7 failed on exactly the bug it fixed, somebody landed one of its three
+# changes independently because they did not know a fix was in review, and
+# gitops-ci.yml moved twice underneath it — so resolving the conflict carelessly
+# would have reverted shipped work.
+#
+# `actions` cut four releases in those three days. Review latency exceeded change
+# velocity and the pull request became a hazard rather than merely late.
+
+on:
+  schedule:
+    # Monday morning, before the week's work starts on top of it.
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    outputs:
+      summary: ${{ steps.scan.outputs.summary }}
+      detail: ${{ steps.scan.outputs.detail }}
+      found: ${{ steps.scan.outputs.found }}
+    steps:
+      - name: Find pull requests that have gone stale
+        id: scan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          # Business days, roughly. Three working days open is late; a week is a
+          # different problem.
+          DAYS: "3"
+          # Only alert on what crossed the line this week.
+          WINDOW: "10"
+        run: |
+          set -euo pipefail
+
+          became=$(date -u -d "-${DAYS} days" +%Y-%m-%d)
+          window=$(date -u -d "-${WINDOW} days" +%Y-%m-%d)
+
+          # Drafts are excluded: a draft is somebody saying it is not ready, which
+          # is the opposite of the thing being detected here.
+          #
+          # Two queries, deliberately. The org has 20 pull requests open past the
+          # threshold today, some of them four months old. Listing all of them
+          # every Monday is a channel nobody reads by the second week — the §11
+          # failure, in an alert.
+          #
+          # So the ALERT is about pull requests that went stale THIS WEEK, and the
+          # standing backlog is a number for context. A backlog is a triage
+          # problem, not an alerting one.
+          gh search prs --owner "$OWNER" --state open --draft=false \
+            --created "<=$became" --limit 100 --json number \
+            > "$RUNNER_TEMP/all-stale.json"
+          backlog=$(jq 'length' "$RUNNER_TEMP/all-stale.json")
+
+          gh search prs --owner "$OWNER" --state open --draft=false \
+            --created "$window..$became" --limit 50 \
+            --json number,title,repository,createdAt,author \
+            > "$RUNNER_TEMP/stale.json"
+
+          count=$(jq 'length' "$RUNNER_TEMP/stale.json")
+          echo "newly stale: $count   standing backlog: $backlog"
+
+          if [ "$count" -eq 0 ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing went stale this week. This is the expected result."
+            exit 0
+          fi
+
+          {
+            echo "found=true"
+            echo "summary=$count pull request(s) went stale this week ($backlog open past ${DAYS} days in total)"
+            printf 'detail<<DETAIL\n'
+            jq -r '.[] | "• <https://github.com/\(.repository.nameWithOwner)/pull/\(.number)|\(.repository.name)#\(.number)> — \(.title) _(\(.author.login))_"' \
+              "$RUNNER_TEMP/stale.json"
+            printf 'DETAIL\n'
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Stale pull requests"
+            echo
+            jq -r '.[] | "- \(.repository.name)#\(.number) — \(.title) (\(.author.login))"' "$RUNNER_TEMP/stale.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  tell-somebody:
+    needs: find
+    if: needs.find.outputs.found == 'true'
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v0.23.0
+    with:
+      summary: ${{ needs.find.outputs.summary }}
+      detail: ${{ needs.find.outputs.detail }}
+      severity: warn
+    secrets:
+      webhook: ${{ secrets.SLACK_ALERTS_WEBHOOK }}
