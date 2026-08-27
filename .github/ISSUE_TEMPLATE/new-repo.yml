@@ -1,0 +1,110 @@
+name: Request a new repository
+description: Get a repository that already follows the standard, without knowing what the standard is.
+title: "Repo request: "
+labels: ["repo-request"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill this in and a repository will be created for you — with CI, branch
+        protection, ownership and the security gates already set up.
+
+        Someone has to approve it before it is created. You will get a comment on
+        this issue either way.
+
+  - type: input
+    id: repo_name
+    attributes:
+      label: Repository name
+      description: Lowercase, hyphens, no spaces. This becomes the URL.
+      placeholder: customer-insights
+    validations:
+      required: true
+
+  - type: input
+    id: repo_description
+    attributes:
+      label: What is it for?
+      description: One line. It becomes the repository description, and it is the first thing anyone reads.
+      placeholder: Ingestion and models for the Acme engagement
+    validations:
+      required: true
+
+  - type: input
+    id: owning_team
+    attributes:
+      label: Owning team
+      description: >-
+        The GitHub team that owns this. Lowercase with hyphens. It must already
+        exist and hold write access, or CODEOWNERS will be silently ignored.
+      placeholder: polaris
+    validations:
+      required: true
+
+  - type: dropdown
+    id: archetype
+    attributes:
+      label: What kind of repository?
+      description: If you are unsure, pick the closest single thing. It can hold more later.
+      options:
+        - "monorepo — several of the below in one repository"
+        - "application — an installed application or platform component"
+        - "web-app — a browser front end: dashboards, internal tools, my-apps"
+        - "gitops — one install's desired state, reconciled by Flux"
+        - "dbt-project — an install's dbt project"
+        - "dlt-pipeline — one ingestion pipeline"
+        - "docs — standards, documentation, anything whose product is prose"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: folders
+    attributes:
+      label: If you chose monorepo, which parts?
+      description: Ignored for every other kind. Pick at least one.
+      options:
+        - label: gitops
+        - label: application
+        - label: web-app
+        - label: dbt-project
+        - label: dlt-pipeline
+
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Front-end framework
+      description: Only asked because you picked web-app. Next ships a Dockerfile and publishes an image; react-vite does not.
+      options:
+        - next
+        - react-vite
+      default: 1
+
+  - type: dropdown
+    id: warehouse
+    attributes:
+      label: Warehouse
+      description: Only asked because you picked dbt-project.
+      options:
+        - clickhouse
+        - bigquery
+        - duckdb
+      default: 0
+
+  - type: input
+    id: source_name
+    attributes:
+      label: Source name
+      description: >-
+        Only asked because you picked dlt-pipeline. Lowercase with underscores —
+        it names the schema the data lands in, and downstream dbt is declared
+        against it, so renaming it later is a breaking change.
+      placeholder: stripe
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **What happens next:** a workflow renders the repository from the
+        scaffold and waits for approval. Once approved it creates the repository,
+        pushes the first commit, protects `main`, and comments here with the link.
