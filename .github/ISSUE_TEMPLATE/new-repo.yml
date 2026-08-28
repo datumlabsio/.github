@@ -1,5 +1,5 @@
-name: Request a new repository
-description: Get a repository that already follows the standard, without knowing what the standard is.
+name: Request a repository
+description: One component — an application, a front end, a dbt project, a pipeline, or docs.
 title: "Repo request: "
 labels: ["repo-request"]
 
@@ -12,6 +12,9 @@ body:
 
         Someone has to approve it before it is created. You will get a comment on
         this issue either way.
+
+        **Several components in one repository?** Use *Request a monorepo*
+        instead — go back and pick it from the list.
 
   - type: input
     id: repo_name
@@ -48,9 +51,9 @@ body:
       label: What kind of repository?
       description: If you are unsure, pick the closest single thing. It can hold more later.
       options:
-        - "monorepo — several of the below in one repository"
+        - "web-app (Next.js) — a browser front end that server-renders, ships a Dockerfile and publishes an image"
+        - "web-app (React + Vite) — a browser front end that builds to static files, no image"
         - "application — an installed application or platform component"
-        - "web-app — a browser front end: dashboards, internal tools, my-apps"
         - "gitops — one install's desired state, reconciled by Flux"
         - "dbt-project — an install's dbt project"
         - "dlt-pipeline — one ingestion pipeline"
@@ -58,48 +61,53 @@ body:
     validations:
       required: true
 
-  - type: checkboxes
-    id: folders
+  - type: markdown
     attributes:
-      label: If you chose monorepo, which parts?
-      description: Ignored for every other kind. Pick at least one.
-      options:
-        - label: gitops
-        - label: application
-        - label: web-app
-        - label: dbt-project
-        - label: dlt-pipeline
+      value: |
+        ---
+        ### The rest only matters for some kinds
 
-  - type: dropdown
-    id: framework
-    attributes:
-      label: Front-end framework
-      description: Only asked because you picked web-app. Next ships a Dockerfile and publishes an image; react-vite does not.
-      options:
-        - next
-        - react-vite
-      default: 1
+        Leave anything below blank if it does not apply. Blank means the scaffold
+        picks its own default, and the comment you get back will say what it
+        picked.
 
   - type: dropdown
     id: warehouse
     attributes:
       label: Warehouse
-      description: Only asked because you picked dbt-project.
+      description: Only if you picked dbt-project.
       options:
         - clickhouse
         - bigquery
         - duckdb
-      default: 0
 
   - type: input
     id: source_name
     attributes:
       label: Source name
       description: >-
-        Only asked because you picked dlt-pipeline. Lowercase with underscores —
-        it names the schema the data lands in, and downstream dbt is declared
-        against it, so renaming it later is a breaking change.
+        Only if you picked dlt-pipeline. Lowercase with underscores — it names
+        the schema the data lands in, and downstream dbt is declared against it,
+        so renaming it later is a breaking change.
       placeholder: stripe
+
+  - type: checkboxes
+    id: has_proposals
+    attributes:
+      label: Numbered proposals
+      description: Only if you picked docs. Adds an `rfcs/` folder with the proposal template.
+      options:
+        - label: This repository carries numbered proposals
+
+  - type: input
+    id: placeholder_paths
+    attributes:
+      label: Paths that must not contain TODO or TBD
+      description: >-
+        Only if you picked docs. Space separated, relative to the repository
+        root. Blank switches the check off — a specification with a TODO in it is
+        not a specification, so name the folders that are meant to be finished.
+      placeholder: standards/ vision/
 
   - type: markdown
     attributes:
@@ -107,4 +115,5 @@ body:
         ---
         **What happens next:** a workflow renders the repository from the
         scaffold and waits for approval. Once approved it creates the repository,
-        pushes the first commit, protects `main`, and comments here with the link.
+        pushes the first commit, protects `main`, and comments here with the link
+        and every answer it used.
