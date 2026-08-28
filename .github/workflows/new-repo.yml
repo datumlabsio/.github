@@ -111,6 +111,38 @@ jobs:
       # not the same as "it does not exist". The real refusal is
       # `POST /orgs/{org}/repos`, which returns 422 on a duplicate name and
       # fails the step below.
+      # A dropdown of real teams was tried and reverted: it is regenerated on a
+      # schedule, so a team created on Tuesday was not selectable until the
+      # following Monday, and the requester's only options were to wait or to
+      # name somebody else's team. A control with a week of lag is not a control.
+      #
+      # Checking the name instead has neither problem — no lag, and a typo is
+      # refused with the real list rather than rendering a CODEOWNERS entry that
+      # GitHub silently ignores.
+      #
+      # Possible at all only because `datum-police` was granted organisation
+      # `Members: read`. Before that this could not be asked.
+      - name: The owning team is a real team
+        env:
+          GH_TOKEN: ${{ steps.scribe.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          ANSWERS: ${{ steps.request.outputs.answers }}
+        run: |
+          set -euo pipefail
+          team=$(printf '%s' "$ANSWERS" | jq -r '.owning_team // empty')
+          if [ -z "$team" ]; then
+            echo "::error::No owning team was given."
+            exit 1
+          fi
+          if gh api "orgs/$OWNER/teams/$team" >/dev/null 2>&1; then
+            echo "$team exists"
+            exit 0
+          fi
+          # Naming the real teams matters more than saying no. A requester who
+          # guessed "data" instead of "datum-core" cannot fix it from "invalid".
+          echo "::error::'$team' is not a team in $OWNER. Valid teams: $(gh api --paginate "orgs/$OWNER/teams" -q '.[].slug' | sort | paste -sd, - | sed 's/,/, /g')"
+          exit 1
+
       - name: Refuse to overwrite something that already exists
         env:
           GH_TOKEN: ${{ steps.scribe.outputs.token }}
