@@ -158,15 +158,6 @@ def _():
     assert a["framework"] == "next", a
 
 
-@case("7  both optional fields blank are simply absent")
-def _():
-    rc, a, log = run(build_body(SINGLE, {**BASE, "archetype": "dbt-project"}))
-    assert rc == 0, log
-    assert "warehouse" not in a and "source_name" not in a, a
-
-
-# ------------------------------------------------------------------- refusals
-
 @case("5  monorepo with BOTH web-app rows ticked is refused, reason named")
 def _():
     rc, a, log = run(build_body(
@@ -184,33 +175,40 @@ def _():
 
 @case("16 an untouched dropdown says the word None, and is not an answer")
 def _():
-    rc, a, log = run(build_body(SINGLE, {**BASE, "archetype": "generic"}))
+    # The live forms no longer carry an OPTIONAL dropdown — every question left
+    # is required — so this is exercised against a synthetic one. The guard has
+    # to stay: the next optional dropdown somebody adds must not reintroduce the
+    # bug that reached a real requester.
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for f in TEMPLATES.glob("*.yml"):
+            (tmp / f.name).write_text(f.read_text())
+        form = yaml.safe_load((tmp / "new-repo.yml").read_text())
+        form["body"].append({
+            "type": "dropdown",
+            "id": "warehouse",
+            "attributes": {"label": "Warehouse", "options": ["clickhouse", "bigquery"]},
+        })
+        (tmp / "new-repo.yml").write_text(yaml.safe_dump(form, sort_keys=False))
+        body = build_body(tmp / "new-repo.yml", {**BASE, "archetype": "docs"})
+        assert "\nNone\n" in body, "the builder stopped rendering an untouched dropdown as None"
+        rc, a, log = run(body, templates=tmp)
     assert rc == 0, log
     assert "warehouse" not in a, f"the word None was taken as a warehouse: {a}"
 
 
-@case("17 an answered dropdown still comes through")
+@case("17 a required dropdown's real answer still comes through")
 def _():
-    rc, a, log = run(build_body(
-        SINGLE, {**BASE, "archetype": "dbt-project", "warehouse": "bigquery"}))
+    rc, a, log = run(build_body(SINGLE, {**BASE, "archetype": "docs"}))
     assert rc == 0, log
-    assert a["warehouse"] == "bigquery", a
+    assert a["owning_team"] == "polaris", a
 
 
-@case("18 a free-text field really containing None is kept")
+@case("18 free text that really says None is kept")
 def _():
-    rc, a, log = run(build_body(
-        SINGLE, {**BASE, "archetype": "docs", "placeholder_paths": "None"}))
+    rc, a, log = run(build_body(SINGLE, {**BASE, "repo_description": "None", "archetype": "docs"}))
     assert rc == 0, log
-    assert a["placeholder_paths"] == "None", f"a typed word was discarded: {a}"
-
-
-@case("8  a bad source_name is passed through for copier to refuse, not re-validated here")
-def _():
-    rc, a, log = run(build_body(
-        SINGLE, {**BASE, "archetype": "dlt-pipeline", "source_name": "Stripe Ingest"}))
-    assert rc == 0, log
-    assert a["source_name"] == "Stripe Ingest", a
+    assert a["repo_description"] == "None", f"a typed word was discarded: {a}"
 
 
 @case("10 the same label meaning two different fields is refused at startup")
@@ -244,30 +242,6 @@ def _():
 
 
 # --------------------------------------- the two questions nobody was asked
-
-@case("13 has_proposals ticked becomes true")
-def _():
-    rc, a, log = run(build_body(SINGLE, {
-        **BASE, "archetype": "docs",
-        "has_proposals": ["This repository carries numbered proposals"]}))
-    assert rc == 0, log
-    assert a["has_proposals"] == "true", a
-
-
-@case("14 has_proposals unticked becomes false, not the raw markdown")
-def _():
-    rc, a, log = run(build_body(SINGLE, {**BASE, "archetype": "docs"}))
-    assert rc == 0, log
-    assert a["has_proposals"] == "false", a
-
-
-@case("15 placeholder_paths is carried through verbatim")
-def _():
-    rc, a, log = run(build_body(SINGLE, {
-        **BASE, "archetype": "docs", "placeholder_paths": "standards/ vision/"}))
-    assert rc == 0, log
-    assert a["placeholder_paths"] == "standards/ vision/", a
-
 
 def main() -> int:
     failed = []
