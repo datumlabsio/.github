@@ -34,14 +34,34 @@ body:
     validations:
       required: true
 
-  - type: input
+  - type: dropdown
     id: owning_team
     attributes:
       label: Owning team
       description: >-
-        The GitHub team that owns this. Lowercase with hyphens. It must already
-        exist and hold write access, or CODEOWNERS will be silently ignored.
-      placeholder: polaris
+        The GitHub team that owns this. **It must already have write access to
+        the repository once it exists** — a CODEOWNERS entry naming a team
+        without access is ignored by GitHub, with no error and no warning, and
+        reviews are then required from nobody. The comment you get back says
+        whether the team really has access.
+      options:
+        - admin-core
+        - aml
+        - asr
+        - cffg
+        - core
+        - datum-core
+        - devops
+        - ember-capital
+        - fair
+        - polaris
+        - ramjackwest
+        - smashmath
+        - students
+        - vero_team
+        - vision-analytics
+        - workshop
+        - ysl
     validations:
       required: true
 
