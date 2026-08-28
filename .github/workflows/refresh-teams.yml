@@ -4,20 +4,22 @@ name: refresh-teams
 # options cannot be fetched when the form is rendered. So the file is regenerated
 # instead, and a pull request is opened when the org's teams have changed.
 #
-# NOT SCHEDULED YET, on purpose. Listing organisation teams needs `Members: read`
-# on `datum-police`, which has not been granted. A weekly run that fails every
-# Monday is noise that teaches people to ignore a red workflow, and a weekly run
-# that quietly exits 0 is the silent no-op this whole track keeps finding. So it
-# is dispatch-only until the permission exists — then add:
+# `Members: read` was granted to `datum-police` on 2026-08-28, so this can now
+# list the organisation's teams and the weekly schedule is on.
 #
-#   schedule:
-#     - cron: "0 8 * * 1"
+# Both halves were watched working before the cron was turned on — the no-op path
+# ("the dropdown already matches") and the path that actually opens a pull
+# request. The second one was broken, and only a real run found it. See the
+# checkout below.
 #
 # The dropdown is a convenience, never the gate. `new-repo` reads back whether
 # the owning team actually has access to the repository it just made, and says so
 # in the comment. Keep both.
 
 on:
+  schedule:
+    # Monday morning, before anybody requests a repository for the week.
+    - cron: "0 8 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -27,9 +29,14 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.0.0
-
+      # BEFORE the checkout, and handed to it. `actions/checkout` stores whatever
+      # token it is given as git's credential for this repository, and `git push`
+      # uses THAT — not the `GH_TOKEN` environment variable a later step sets.
+      # Minting afterwards left the read-only GITHUB_TOKEN in git's config and
+      # the push died on `403`, in a step nothing had ever run.
+      #
+      # Same shape as the copier credential problem in `scaffold-update`: `gh`
+      # reads an environment variable, `git` does not.
       - name: Mint a token that can see the organisation
         id: token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -37,6 +44,11 @@ jobs:
           app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
           private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.0.0
+        with:
+          token: ${{ steps.token.outputs.token }}
 
       - name: Rewrite the dropdown from the real teams
         env:
