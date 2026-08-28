@@ -1,0 +1,39 @@
+name: parser-tests
+
+# `parse-request.py` turns a rendered issue form back into copier answers. Get
+# it wrong and a repository renders with an answer nobody chose — successfully,
+# and looking correct.
+#
+# Every case here used to need a real issue, a real approval and a real
+# repository. Ten of those, each blocking on one human, and none of it re-runnable
+# on a pull request. The bodies are built from the forms instead, exactly the way
+# GitHub builds them.
+#
+# Deliberately NOT in ci.yml. That file is a thin caller — it names which shared
+# stages run and pins a version, and runs nothing of its own (DES §4). This is
+# repo-specific logic, so it lives in its own workflow, the way new-repo.yml
+# does.
+#
+# Deliberately NOT path-filtered. A gate reachable only from the files it checks
+# is a gate that skips: the repository-wide pre-commit hooks were reachable only
+# through python-ci, and a pull request touching other folders sailed past them
+# (B-66). This run takes seconds.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  parser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.0.0
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet --disable-pip-version-check pyyaml
+
+      - name: The parser still reads what the forms produce
+        run: python3 tests/test_parse_request.py

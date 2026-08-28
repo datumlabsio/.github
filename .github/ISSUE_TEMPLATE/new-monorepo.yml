@@ -1,5 +1,5 @@
-name: Request a repository
-description: One component — an application, a front end, a dbt project, a pipeline, or docs.
+name: Request a monorepo
+description: Several components in one repository — a front end, a dbt project, a pipeline, an install's desired state.
 title: "Repo request: "
 labels: ["repo-request"]
 
@@ -8,13 +8,14 @@ body:
     attributes:
       value: |
         Fill this in and a repository will be created for you — with CI, branch
-        protection, ownership and the security gates already set up.
+        protection, ownership and the security gates already set up, and one
+        folder per component you tick.
 
         Someone has to approve it before it is created. You will get a comment on
         this issue either way.
 
-        **Several components in one repository?** Use *Request a monorepo*
-        instead — go back and pick it from the list.
+        **Only one component?** Use *Request a repository* instead — go back and
+        pick it from the list.
 
   - type: input
     id: repo_name
@@ -45,27 +46,27 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: archetype
+  - type: checkboxes
+    id: folders
     attributes:
-      label: What kind of repository?
-      description: If you are unsure, pick the closest single thing. It can hold more later.
+      label: Which parts?
+      description: >-
+        One folder each, with its own CI and its own owners. Pick at least one.
+        Pick only one of the two web-app rows — there is a single `web-app/`
+        folder and it is built one way or the other.
       options:
-        - "web-app (Next.js) — a browser front end that server-renders, ships a Dockerfile and publishes an image"
-        - "web-app (React + Vite) — a browser front end that builds to static files, no image"
-        - "application — an installed application or platform component"
-        - "gitops — one install's desired state, reconciled by Flux"
-        - "dbt-project — an install's dbt project"
-        - "dlt-pipeline — one ingestion pipeline"
-        - "docs — standards, documentation, anything whose product is prose"
-    validations:
-      required: true
+        - label: gitops
+        - label: application
+        - label: web-app (Next.js)
+        - label: web-app (React + Vite)
+        - label: dbt-project
+        - label: dlt-pipeline
 
   - type: markdown
     attributes:
       value: |
         ---
-        ### The rest only matters for some kinds
+        ### The rest only matters for some parts
 
         Leave anything below blank if it does not apply. Blank means the scaffold
         picks its own default, and the comment you get back will say what it
@@ -75,7 +76,7 @@ body:
     id: warehouse
     attributes:
       label: Warehouse
-      description: Only if you picked dbt-project.
+      description: Only if you ticked dbt-project.
       options:
         - clickhouse
         - bigquery
@@ -86,28 +87,10 @@ body:
     attributes:
       label: Source name
       description: >-
-        Only if you picked dlt-pipeline. Lowercase with underscores — it names
+        Only if you ticked dlt-pipeline. Lowercase with underscores — it names
         the schema the data lands in, and downstream dbt is declared against it,
         so renaming it later is a breaking change.
       placeholder: stripe
-
-  - type: checkboxes
-    id: has_proposals
-    attributes:
-      label: Numbered proposals
-      description: Only if you picked docs. Adds an `rfcs/` folder with the proposal template.
-      options:
-        - label: This repository carries numbered proposals
-
-  - type: input
-    id: placeholder_paths
-    attributes:
-      label: Paths that must not contain TODO or TBD
-      description: >-
-        Only if you picked docs. Space separated, relative to the repository
-        root. Blank switches the check off — a specification with a TODO in it is
-        not a specification, so name the folders that are meant to be finished.
-      placeholder: standards/ vision/
 
   - type: markdown
     attributes:
