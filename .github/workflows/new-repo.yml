@@ -269,8 +269,23 @@ jobs:
           # repository that looks perfectly fine — wrong warehouse, wrong
           # framework, no `rfcs/` folder — and nothing fails. The requester is
           # the only person who knows what they asked for, so show them.
+          # The RENDERED answers file, not what the form collected. The form
+          # deliberately asks four questions; everything else the scaffold needs
+          # is defaulted. Echoing only what was typed would hide exactly the
+          # values nobody chose — the warehouse, the source name — which are the
+          # ones worth checking.
+          #
+          # `.copier-answers.yml` is written by copier itself and is the whole
+          # truth, defaults included. It exists even when the run failed after
+          # rendering.
           answers_block() {
-            if [ -n "${ANSWERS:-}" ]; then
+            af="$RUNNER_TEMP/repo/.copier-answers.yml"
+            if [ -f "$af" ]; then
+              printf '%s\n\n~~~yaml\n%s\n~~~\n\n%s\n\n' \
+                "**Built from these answers.** Anything you were not asked took the scaffold's default:" \
+                "$(grep -v '^_src_path' "$af")" \
+                "To change one later, in the new repository: \`copier update -d <key>=<value>\`" 
+            elif [ -n "${ANSWERS:-}" ]; then
               printf '%s\n\n' "**Built from these answers:**"
               printf '%s' "$ANSWERS" | jq -r 'to_entries[] | "- " + .key + ": " + (.value|tostring)'
               printf '\n'
