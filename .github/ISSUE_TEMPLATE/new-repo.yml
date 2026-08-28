@@ -69,7 +69,11 @@ body:
     id: archetype
     attributes:
       label: What kind of repository?
-      description: If you are unsure, pick the closest single thing. It can hold more later.
+      description: >-
+        If you are unsure, pick the closest single thing — it can hold more
+        later. `generic` is the honest answer for anything we do not scaffold:
+        it gives you the floor every repo gets and no build or test gates at
+        all, rather than a hand-made repo that inherits nothing.
       options:
         - "web-app (Next.js) — a browser front end that server-renders, ships a Dockerfile and publishes an image"
         - "web-app (React + Vite) — a browser front end that builds to static files, no image"
@@ -78,6 +82,7 @@ body:
         - "dbt-project — an install's dbt project"
         - "dlt-pipeline — one ingestion pipeline"
         - "docs — standards, documentation, anything whose product is prose"
+        - "generic — anything else: a scratch repo, or a stack we do not scaffold"
     validations:
       required: true
 
