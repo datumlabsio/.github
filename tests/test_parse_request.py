@@ -53,7 +53,16 @@ def build_body(form: Path, answers: dict[str, object]) -> str:
                 out.append(f"- [{mark}] {opt['label']}")
             out.append("")
         elif given is None:
-            out.append("_No response_\n")
+            # An untouched field does NOT render the same way for every type,
+            # and assuming it did is what let a real request through:
+            #
+            #   input     -> "_No response_"
+            #   dropdown  -> "None"
+            #
+            # This builder previously wrote "_No response_" for both, so the
+            # suite agreed with the parser and neither matched GitHub. Copied
+            # from a real issue body, not from memory.
+            out.append("None\n" if kind == "dropdown" else "_No response_\n")
         else:
             out.append(f"{given}\n")
     return "\n".join(out)
@@ -171,6 +180,29 @@ def _():
     rc, a, log = run(build_body(MONOREPO, {**BASE, "folders": []}))
     assert rc != 0, f"an empty monorepo was accepted: {a}"
     assert "no components" in log or "No parts" in log, log
+
+
+@case("16 an untouched dropdown says the word None, and is not an answer")
+def _():
+    rc, a, log = run(build_body(SINGLE, {**BASE, "archetype": "generic"}))
+    assert rc == 0, log
+    assert "warehouse" not in a, f"the word None was taken as a warehouse: {a}"
+
+
+@case("17 an answered dropdown still comes through")
+def _():
+    rc, a, log = run(build_body(
+        SINGLE, {**BASE, "archetype": "dbt-project", "warehouse": "bigquery"}))
+    assert rc == 0, log
+    assert a["warehouse"] == "bigquery", a
+
+
+@case("18 a free-text field really containing None is kept")
+def _():
+    rc, a, log = run(build_body(
+        SINGLE, {**BASE, "archetype": "docs", "placeholder_paths": "None"}))
+    assert rc == 0, log
+    assert a["placeholder_paths"] == "None", f"a typed word was discarded: {a}"
 
 
 @case("8  a bad source_name is passed through for copier to refuse, not re-validated here")

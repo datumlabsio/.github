@@ -313,10 +313,21 @@ jobs:
               # `owning_team` and `folders`, and its messages are plain English.
               # Re-stating those rules here would be a second copy that drifts.
               if [ -s "$RUNNER_TEMP/copier.err" ]; then
+                # copier raises through plumbum, so its stderr is a Python
+                # traceback with the ONE useful line at the bottom. `tail -40`
+                # put forty lines of stack into the comment and buried it — a
+                # real requester got a wall of `site-packages` paths and had to
+                # read to the end to find "Invalid choice for 'warehouse'".
+                #
+                # Last non-empty line first, stack behind a fold.
+                #
                 # `~~~` rather than backticks: markdown accepts either, and a
                 # backtick inside single quotes reads to shellcheck as an
                 # attempted command substitution (SC2016).
-                printf '\n%s\n\n~~~\n%s\n~~~\n' "The scaffold refused it:" \
+                why=$(awk 'NF { last = $0 } END { print last }' "$RUNNER_TEMP/copier.err" \
+                      | sed -E 's/^[A-Za-z_]*(Error|Exception): //')
+                printf '\n%s\n\n~~~\n%s\n~~~\n' "The scaffold refused it:" "${why:-see the run log}"
+                printf '\n<details><summary>Full output</summary>\n\n~~~\n%s\n~~~\n\n</details>\n' \
                   "$(tail -n 40 "$RUNNER_TEMP/copier.err")"
               fi
             } > "$RUNNER_TEMP/comment.md"
