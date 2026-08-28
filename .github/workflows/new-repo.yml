@@ -81,6 +81,22 @@ jobs:
           # it. It is scoped to the organisation.
           owner: ${{ github.repository_owner }}
 
+      # The factory token can create repositories and NOTHING else it does not
+      # need — it holds no `issues` permission and is installed on selected
+      # repositories, so it cannot read `scaffolds` either.
+      #
+      # Those two jobs belong to `datum-police`, which already has them. Using
+      # one token for everything would mean widening the factory until it is
+      # just `datum-police` with `administration` back on, which is the thing
+      # this split exists to prevent.
+      - name: Mint the reader/commenter token
+        id: scribe
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Read the request
         id: request
         env:
@@ -90,9 +106,14 @@ jobs:
           python3 -m pip install --quiet --disable-pip-version-check pyyaml
           python3 .github/scripts/parse-request.py
 
+      # ADVISORY, not the guard. Both Apps are installed on selected
+      # repositories, so a 404 here means "this token cannot see it", which is
+      # not the same as "it does not exist". The real refusal is
+      # `POST /orgs/{org}/repos`, which returns 422 on a duplicate name and
+      # fails the step below.
       - name: Refuse to overwrite something that already exists
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ steps.scribe.outputs.token }}
           OWNER: ${{ github.repository_owner }}
           NAME: ${{ steps.request.outputs.repo_name }}
           ANSWERS: ${{ steps.request.outputs.answers }}
@@ -115,7 +136,10 @@ jobs:
 
       - name: Render it from the scaffold
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          # scribe, not factory: `scaffolds` is private and the factory App is
+          # not installed on it. With the factory token the release lookup
+          # returns a bare `gh: Not Found (HTTP 404)`.
+          GH_TOKEN: ${{ steps.scribe.outputs.token }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
@@ -173,8 +197,8 @@ jobs:
 
           cd "$RUNNER_TEMP/repo"
           git init -q -b main
-          git config user.name "Datum Police"
-          git config user.email "datum-police[bot]@users.noreply.github.com"
+          git config user.name "Datum Repo Factory"
+          git config user.email "datum-repo-factory[bot]@users.noreply.github.com"
           git add -A
           git commit -qm "chore: scaffold $NAME" -m "Requested in $FROM#$ISSUE."
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$OWNER/$NAME.git"
@@ -190,7 +214,10 @@ jobs:
       - name: Tell the requester
         if: always()
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          # scribe, not factory: the factory App holds no `issues` permission,
+          # and `gh issue comment` fails with
+          # `Resource not accessible by integration (addComment)`.
+          GH_TOKEN: ${{ steps.scribe.outputs.token }}
           URL: ${{ steps.create.outputs.url }}
           NAME: ${{ steps.request.outputs.repo_name }}
           ISSUE: ${{ github.event.issue.number }}
