@@ -42,6 +42,18 @@ jobs:
         run: |
           set -euo pipefail
 
+          # How many repositories this token can actually search. A scan is only
+          # as wide as its credential, and "found nothing" and "could not look"
+          # are indistinguishable in the output unless the denominator is stated.
+          # `datum-police` is installed on SELECTED repositories, so this number
+          # is the honest scope of every count below.
+          scanned=$(gh api /installation/repositories --jq .total_count)
+          echo "searching $scanned repositories"
+          if [ "$scanned" -eq 0 ]; then
+            echo "::error::This token can see no repositories, so a count of zero would mean nothing. Check the datum-police installation."
+            exit 1
+          fi
+
           became=$(date -u -d "-${DAYS} days" +%Y-%m-%d)
           window=$(date -u -d "-${WINDOW} days" +%Y-%m-%d)
 
@@ -71,13 +83,13 @@ jobs:
 
           if [ "$count" -eq 0 ]; then
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "Nothing went stale this week. This is the expected result."
+            echo "Nothing went stale this week across $scanned repositories. This is the expected result."
             exit 0
           fi
 
           {
             echo "found=true"
-            echo "summary=$count pull request(s) went stale this week ($backlog open past ${DAYS} days in total)"
+            echo "summary=$count pull request(s) went stale this week ($backlog open past ${DAYS} days across $scanned repositories)"
             printf 'detail<<DETAIL\n'
             jq -r '.[] | "• <https://github.com/\(.repository.nameWithOwner)/pull/\(.number)|\(.repository.name)#\(.number)> — \(.title) _(\(.author.login))_"' \
               "$RUNNER_TEMP/stale.json"
