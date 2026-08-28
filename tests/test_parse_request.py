@@ -197,7 +197,7 @@ def _():
     assert "warehouse" not in a, f"the word None was taken as a warehouse: {a}"
 
 
-@case("17 a required dropdown's real answer still comes through")
+@case("17 a required field's real answer still comes through")
 def _():
     rc, a, log = run(build_body(SINGLE, {**BASE, "archetype": "docs"}))
     assert rc == 0, log
