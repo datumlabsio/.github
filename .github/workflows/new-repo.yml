@@ -180,6 +180,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           NAME: ${{ steps.request.outputs.repo_name }}
           DESCRIPTION: ${{ steps.request.outputs.description }}
+          ANSWERS: ${{ steps.request.outputs.answers }}
           ISSUE: ${{ github.event.issue.number }}
           FROM: ${{ github.repository }}
           RULESET: ${{ github.workspace }}/.github/scripts/protect-main.json
@@ -224,6 +225,26 @@ jobs:
           # whenever somebody remembers.
           gh api -X POST "repos/$OWNER/$NAME/rulesets" --input "$RULESET" >/dev/null
           echo "protect-main applied"
+
+          # CODEOWNERS names the owning team. GitHub ignores a CODEOWNERS entry
+          # for a team with no access to the repository — no error, no warning,
+          # and reviews are then required from nobody. The file looks right and
+          # enforces nothing.
+          #
+          # Granting the access from here would need organisation `Members:
+          # write` on an App that already holds `administration`. That is a
+          # decision, not a line of YAML. Until it is taken, this reads back what
+          # access actually exists and says so, rather than leaving a repository
+          # that looks owned and is not.
+          team=$(printf '%s' "$ANSWERS" | jq -r '.owning_team // empty')
+          if [ -n "$team" ] && gh api "repos/$OWNER/$NAME/teams" -q '.[].slug' | grep -qxF "$team"; then
+            echo "team_access=true" >> "$GITHUB_OUTPUT"
+            echo "$team has access"
+          else
+            echo "team_access=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::$team has no access to $OWNER/$NAME, so its CODEOWNERS entry is inert until somebody grants it."
+          fi
+
           echo "url=https://github.com/$OWNER/$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Tell the requester
@@ -235,6 +256,7 @@ jobs:
           GH_TOKEN: ${{ steps.scribe.outputs.token }}
           URL: ${{ steps.create.outputs.url }}
           CREATED: ${{ steps.create.outputs.created }}
+          TEAM_ACCESS: ${{ steps.create.outputs.team_access }}
           ANSWERS: ${{ steps.request.outputs.answers }}
           OWNER: ${{ github.repository_owner }}
           NAME: ${{ steps.request.outputs.repo_name }}
@@ -259,6 +281,10 @@ jobs:
             {
               printf '%s\n\n' "**$NAME is ready:** $URL"
               answers_block
+              if [ "${TEAM_ACCESS:-}" != "true" ]; then
+                team=$(printf '%s' "${ANSWERS:-}" | jq -r '.owning_team // "the owning team"')
+                printf '%s\n\n' "**Action needed: $team does not have access to this repository yet.** Its CODEOWNERS entry is ignored by GitHub until an owner grants the team write access, which means reviews are currently required from nobody. Ask an organisation owner to add it under *Settings to Collaborators and teams*."
+              fi
             } > "$RUNNER_TEMP/head.md"
             printf '%s\n\n%s\n\n%s\n\n%s\n' \
               "$(cat "$RUNNER_TEMP/head.md")" \
