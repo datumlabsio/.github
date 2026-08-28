@@ -26,8 +26,23 @@ TEMPLATES = Path(".github/ISSUE_TEMPLATE")
 # workflow triggers on.
 TRIGGER_LABEL = "repo-request"
 
-# GitHub renders an unanswered optional field as this exact string.
+# How GitHub renders a field nobody filled in. It is NOT one string — it
+# depends on the field type, which was learned the hard way:
+#
+#   input       -> "_No response_"
+#   dropdown    -> "None"          <- literally the word, not a placeholder
+#   checkboxes  -> the option list, every box unticked
+#
+# A real request picked `generic`, left the warehouse alone, and the word "None"
+# went to copier as a real answer:
+#
+#   ValueError: Invalid choice for 'warehouse': 'None' is not in
+#               ['clickhouse', 'bigquery', 'duckdb']
+#
+# It could not happen before the dropdowns lost their `default:` values, which
+# is why it appeared the day the form stopped pre-picking answers for people.
 BLANK = "_No response_"
+BLANK_DROPDOWN = "None"
 
 # The one place a display string has to be mapped by hand. `framework` is folded
 # into the kind/parts choice so nobody is asked about a front end they are not
@@ -54,9 +69,20 @@ def forms() -> dict[Path, dict[str, str]]:
         fields = {}
         for block in doc.get("body", []):
             fid = block.get("id")
-            label = (block.get("attributes") or {}).get("label")
+            attrs = block.get("attributes") or {}
+            label = attrs.get("label")
             if fid and label:
-                fields[label.strip()] = fid
+                # The TYPE is carried too, not just the id. "None" under a
+                # dropdown means unanswered; under a free-text input it is a
+                # word somebody typed, and the two must not be confused.
+                fields[label.strip()] = {
+                    "id": fid,
+                    "type": block.get("type"),
+                    "options": [
+                        o if isinstance(o, str) else (o or {}).get("label")
+                        for o in (attrs.get("options") or [])
+                    ],
+                }
         out[path] = fields
     return out
 
@@ -71,7 +97,8 @@ def check_no_collisions(defs: dict[Path, dict[str, str]]) -> None:
     """
     seen: dict[str, tuple[Path, str]] = {}
     for path, fields in defs.items():
-        for label, fid in fields.items():
+        for label, field in fields.items():
+            fid = field["id"]
             if label in seen and seen[label][1] != fid:
                 other, other_fid = seen[label]
                 print(
@@ -100,7 +127,7 @@ def which_form(body: str, defs: dict[Path, dict[str, str]]) -> Path:
     present = set(headings(body))
     scores = {}
     for path, fields in defs.items():
-        others = set().union(*(set(f) for p, f in defs.items() if p != path)) if len(defs) > 1 else set()
+        others = set().union(*(set(f) for p, f in defs.items() if p != path)) if len(defs) > 1 else set()  # noqa: E501
         exclusive = set(fields) - others
         scores[path] = len(exclusive & present)
 
@@ -120,17 +147,28 @@ def which_form(body: str, defs: dict[Path, dict[str, str]]) -> Path:
     raise SystemExit(1)
 
 
-def answers(body: str, labels: dict[str, str]) -> dict[str, object]:
+def answers(body: str, labels: dict[str, dict]) -> dict[str, object]:
     """Split the body on '### <label>' and read what follows each one."""
     parts = re.split(r"^###\s+(.+?)\s*$", body, flags=re.M)
     found: dict[str, object] = {}
     # parts[0] is anything before the first heading; then (label, value) pairs.
     for label, value in zip(parts[1::2], parts[2::2]):
-        fid = labels.get(label.strip())
-        if not fid:
+        field = labels.get(label.strip())
+        if not field:
             continue
+        fid = field["id"]
         value = value.strip()
         if not value or value == BLANK:
+            continue
+        # An untouched dropdown renders as the word "None". Skipped only when
+        # the dropdown does not actually offer "None" as a choice — otherwise a
+        # real answer would be thrown away, and this script would be deciding
+        # what the form is allowed to mean.
+        if (
+            field["type"] == "dropdown"
+            and value == BLANK_DROPDOWN
+            and BLANK_DROPDOWN not in field["options"]
+        ):
             continue
         # A checkbox block with NOTHING ticked still looks like text. Detect the
         # block by shape — the `[ ]` as well as the `[x]` — not by whether it
@@ -187,7 +225,7 @@ def main() -> int:
     # A form with no `archetype` field IS the monorepo form. Derived from the
     # form definition rather than from its filename, so renaming the file cannot
     # silently change what gets rendered.
-    if "archetype" not in defs[form].values():
+    if "archetype" not in {f["id"] for f in defs[form].values()}:
         a["archetype"] = "monorepo"
 
     unfold_framework(a)
