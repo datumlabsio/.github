@@ -58,10 +58,9 @@ body:
         - ramjackwest
         - smashmath
         - students
-        - vero-team
         - vision-analytics
-        - workshop
         - ysl
+        - a-team-that-does-not-exist
     validations:
       required: true
 
