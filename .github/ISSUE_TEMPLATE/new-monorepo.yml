@@ -86,37 +86,11 @@ body:
     attributes:
       value: |
         ---
-        ### The rest only matters for some parts
+        **That is everything we ask.** Anything else the scaffold needs — the
+        warehouse for a dbt project, the source name for a pipeline — is chosen
+        for you, and the comment you get back lists every value that was used and
+        how to change one.
 
-        Leave anything below blank if it does not apply. Blank means the scaffold
-        picks its own default, and the comment you get back will say what it
-        picked.
-
-  - type: dropdown
-    id: warehouse
-    attributes:
-      label: Warehouse
-      description: Only if you ticked dbt-project.
-      options:
-        - clickhouse
-        - bigquery
-        - duckdb
-
-  - type: input
-    id: source_name
-    attributes:
-      label: Source name
-      description: >-
-        Only if you ticked dlt-pipeline. Lowercase with underscores — it names
-        the schema the data lands in, and downstream dbt is declared against it,
-        so renaming it later is a breaking change.
-      placeholder: stripe
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
         **What happens next:** a workflow renders the repository from the
         scaffold and waits for approval. Once approved it creates the repository,
-        pushes the first commit, protects `main`, and comments here with the link
-        and every answer it used.
+        pushes the first commit, protects `main`, and comments here with the link.
