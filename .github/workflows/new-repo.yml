@@ -55,12 +55,28 @@ jobs:
       - name: Check out
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      # datum-repo-factory, NOT datum-police.
+      #
+      # `datum-police` held `administration: write` until a test proved what the
+      # documentation does not say: `members_can_delete_repositories: false`
+      # gates human members only. A bot with that permission deleted a repository
+      # outright — `DELETE` returned 204.
+      #
+      # So repository creation runs as an App that holds `administration` and
+      # `contents` and NOTHING else, and whose key exists only as a secret on
+      # this environment. `datum-police` keeps `contents`, `workflows`, `issues`
+      # and `pull_requests` at organisation level and can no longer delete
+      # anything.
+      #
+      # The separation is the point: a credential reachable from every workflow
+      # must not be able to destroy a repository, and one that can must be
+      # reachable only from a job somebody approved.
       - name: Mint a token for the run
         id: token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
-          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          app-id: ${{ secrets.DATUM_FACTORY_APP_ID }}
+          private-key: ${{ secrets.DATUM_FACTORY_PRIVATE_KEY }}
           # The repository does not exist yet, so the token cannot be scoped to
           # it. It is scoped to the organisation.
           owner: ${{ github.repository_owner }}
