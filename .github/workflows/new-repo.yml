@@ -186,7 +186,7 @@ jobs:
             printf '%s\n\n%s\n\n%s\n' \
               "**$NAME is ready:** $URL" \
               "It already has CI, \`protect-main\`, an owning team in \`CODEOWNERS\` and the security gates. Clone it and start." \
-              "**One thing left, and it needs an org owner:** add this repository to the \`datum-police\` installation. Until then \`scaffold-update\` and \`main-watch\` skip here with a notice, and this repository silently stops receiving scaffold releases." \
+              "\`scaffold-update\` and \`main-watch\` already reach it: GitHub grants an App access to any repository that App creates, even when it is installed on selected repositories only. Nothing to add by hand." \
               > "$RUNNER_TEMP/comment.md"
             gh issue comment "$ISSUE" --repo "$FROM" --body-file "$RUNNER_TEMP/comment.md"
             gh issue close "$ISSUE" --repo "$FROM" --reason completed
