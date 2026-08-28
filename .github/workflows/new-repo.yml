@@ -182,6 +182,13 @@ jobs:
             -f name="$NAME" -f description="$DESCRIPTION" -F private=true \
             -F has_issues=true -F has_wiki=false -F has_projects=false >/dev/null
           echo "created $OWNER/$NAME"
+          # Recorded IMMEDIATELY, before anything that can still fail. The
+          # ordering here is forced: `protect-main` blocks direct pushes, so the
+          # first push must land BEFORE the ruleset. That means every failure
+          # between here and the end of this step leaves a real repository
+          # behind, and the request has to say so rather than claim nothing
+          # happened.
+          echo "created=true" >> "$GITHUB_OUTPUT"
 
           # `delete_branch_on_merge` is accepted by the create endpoint and
           # silently ignored — the first real run produced a repository with it
@@ -219,6 +226,8 @@ jobs:
           # `Resource not accessible by integration (addComment)`.
           GH_TOKEN: ${{ steps.scribe.outputs.token }}
           URL: ${{ steps.create.outputs.url }}
+          CREATED: ${{ steps.create.outputs.created }}
+          OWNER: ${{ github.repository_owner }}
           NAME: ${{ steps.request.outputs.repo_name }}
           ISSUE: ${{ github.event.issue.number }}
           FROM: ${{ github.repository }}
@@ -233,9 +242,21 @@ jobs:
               > "$RUNNER_TEMP/comment.md"
             gh issue comment "$ISSUE" --repo "$FROM" --body-file "$RUNNER_TEMP/comment.md"
             gh issue close "$ISSUE" --repo "$FROM" --reason completed
+          elif [ "${CREATED:-}" = "true" ]; then
+            # The dangerous case, and the one that used to be reported as
+            # "could not create the repository". It DID create it. An empty,
+            # UNPROTECTED repository is sitting there, and saying otherwise
+            # sends somebody looking for a problem that is not the problem.
+            printf '%s\n\n%s\n\n%s\n' \
+              "**\`$OWNER/$NAME\` was created and then left incomplete** — see the [run log]($RUN)." \
+              "It has no commits and **no \`protect-main\` ruleset**. It is not safe to start work in." \
+              "Delete it, fix the cause, then re-apply the \`repo-request\` label. This issue is left open deliberately." \
+              > "$RUNNER_TEMP/comment.md"
+            gh issue comment "$ISSUE" --repo "$FROM" --body-file "$RUNNER_TEMP/comment.md"
+            echo "::error::$OWNER/$NAME exists but is empty and unprotected. Delete it before retrying."
           else
             printf '%s\n' \
-              "Could not create the repository — see the [run log]($RUN). This issue is left open deliberately: fix the request and re-apply the \`repo-request\` label." \
+              "Nothing was created — see the [run log]($RUN). This issue is left open deliberately: fix the request and re-apply the \`repo-request\` label." \
               > "$RUNNER_TEMP/comment.md"
             gh issue comment "$ISSUE" --repo "$FROM" --body-file "$RUNNER_TEMP/comment.md"
           fi
