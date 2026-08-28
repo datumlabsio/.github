@@ -235,10 +235,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${URL:-}" ]; then
-            printf '%s\n\n%s\n\n%s\n' \
+            printf '%s\n\n%s\n\n%s\n\n%s\n' \
               "**$NAME is ready:** $URL" \
               "It already has CI, \`protect-main\`, an owning team in \`CODEOWNERS\` and the security gates. Clone it and start." \
-              "\`scaffold-update\` and \`main-watch\` already reach it: GitHub grants an App access to any repository that App creates, even when it is installed on selected repositories only. Nothing to add by hand." \
+              "\`main-watch\` works from this first commit — it uses the built-in \`GITHUB_TOKEN\` and needs nothing granted." \
+              "**\`scaffold-update\` does not run here yet.** It pushes to \`.github/workflows/\`, which \`GITHUB_TOKEN\` is forbidden to do, so it needs the \`DATUM_POLICE_APP_ID\` and \`DATUM_POLICE_PRIVATE_KEY\` organisation secrets granted to this repository by an owner. Until then this repository will not receive new scaffold releases, and its weekly run will say so rather than fail." \
               > "$RUNNER_TEMP/comment.md"
             gh issue comment "$ISSUE" --repo "$FROM" --body-file "$RUNNER_TEMP/comment.md"
             gh issue close "$ISSUE" --repo "$FROM" --reason completed
