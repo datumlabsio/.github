@@ -21,9 +21,8 @@ permissions:
   issues: write
 
 jobs:
-  # Deliberately NOT in the repo-creation environment. This has to fire BEFORE
-  # the approval, or nobody knows there is anything to approve — the request
-  # would sit waiting on somebody who has not been told.
+  # Deliberately NOT in the repo-creation environment, so it cannot be delayed
+  # or blocked by anything guarding that environment.
   #
   # `create` does not depend on this: a repository request must not be blocked
   # because a Slack webhook is missing.
@@ -35,7 +34,7 @@ jobs:
       detail: >-
         *${{ github.event.issue.title }}*
 
-        Needs approval before anything is created.
+        Being created now.
       url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       severity: warn
     secrets:
@@ -46,9 +45,17 @@ jobs:
     if: github.event.label.name == 'repo-request'
     runs-on: ubuntu-latest
 
-    # The approval gate. The App credentials live in THIS environment, not at
-    # org level, so no other workflow can reach them: an approval is the only
-    # path to a token that can create a repository.
+    # There is NO approval step, and that is deliberate. Any member can already
+    # create a repository by hand — `members_can_create_repositories` is true on
+    # purpose — so requiring a human to approve this path made the paved road
+    # harder to walk than the unpaved one, which is backwards. This is offered as
+    # an ALTERNATIVE to running copier yourself, not as a checkpoint.
+    #
+    # The environment stays, because the environment was never really the
+    # approval. The factory App's credentials live in it rather than at
+    # organisation level, so no other workflow in this repository can reach a
+    # token that holds `administration: write`. That isolation is the control and
+    # it is unchanged.
     environment: repo-creation
 
     steps:
@@ -69,8 +76,8 @@ jobs:
       # anything.
       #
       # The separation is the point: a credential reachable from every workflow
-      # must not be able to destroy a repository, and one that can must be
-      # reachable only from a job somebody approved.
+      # must not be able to destroy a repository, and one that can create
+      # repositories must be reachable from exactly one job.
       - name: Mint a token for the run
         id: token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
