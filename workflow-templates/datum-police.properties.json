@@ -1,5 +1,5 @@
 {
-  "name": "Datum security baseline",
+  "name": "Datum Police baseline",
   "description": "Semgrep, gitleaks and a dependency audit on every pull request. One file, no secrets, no configuration, no opinion about how the repo is built.",
   "iconName": "octicon shield-lock",
   "categories": ["Security", "Code scanning"]

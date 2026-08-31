@@ -1,4 +1,4 @@
-name: datum-security
+name: datum-police
 
 # The Datum security baseline: Semgrep, gitleaks and a dependency audit, on
 # every pull request.
