@@ -20,15 +20,27 @@ name: drift-watch
 # the next run is invisible. Stronger in one way: it catches drift however it
 # happened, including by an API call nobody logged as interesting.
 #
-# NOT SCHEDULED YET. Reading rulesets needs organisation `administration: read`
-# on `datum-police`, which has not been granted. A weekly run that cannot read
-# the thing it exists to check would be the fourth green no-op this project has
-# found. Once the permission lands, add:
+# `administration: read` was granted to `datum-police` on 2026-08-31, and BOTH
+# halves were watched working before this schedule went on:
 #
-#   schedule:
-#     - cron: "0 9 * * 1"
+#   checked 5 repositories
+#   ::notice::All 5 repositories match what was decided.
+#
+# and, against a branch with seeded drift:
+#
+#   Sent: 2 repository setting(s) changed without a gate, across 6 watched
+#     • *datumlabsio/actions* — is public, was decided private.
+#     • *datumlabsio/zz-drift-proof-not-a-real-repo* — cannot be read.
+#
+# The second one is the point. Four scheduled jobs were found this week broken in
+# the half that WRITES something, every one of them reporting success. A read
+# half that works proves nothing about the half that alerts.
 
 on:
+  schedule:
+    # Monday, after main-watch, conformance-audit and the stale nudge. Drift is
+    # the slowest-moving of them and reads best last.
+    - cron: "0 9 * * 1"
   workflow_dispatch:
 
 permissions:
