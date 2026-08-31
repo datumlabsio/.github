@@ -29,11 +29,26 @@ jobs:
       detail: ${{ steps.scan.outputs.detail }}
       found: ${{ steps.scan.outputs.found }}
     steps:
+      # `datum-police`, not GITHUB_TOKEN. GITHUB_TOKEN is scoped to THIS
+      # repository, so the first version of this job searched exactly one
+      # repository of 228 and reported "Nothing went stale this week."
+      #
+      # A previous attempt to fix that did not land: the patch adding this step
+      # was written but never saved, and the pull request said otherwise. What
+      # caught it was the denominator below, on its first real run —
+      # `searching 1 repositories` where 228 was meant.
+      - name: Mint a token that can see other repositories
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Find pull requests that have gone stale
         id: scan
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ steps.token.outputs.token }}
           # Business days, roughly. Three working days open is late; a week is a
           # different problem.
           DAYS: "3"
@@ -41,66 +56,84 @@ jobs:
           WINDOW: "10"
         run: |
           set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime, json, os, subprocess, sys
 
-          # How many repositories this token can actually search. A scan is only
-          # as wide as its credential, and "found nothing" and "could not look"
-          # are indistinguishable in the output unless the denominator is stated.
-          # `datum-police` is installed on SELECTED repositories, so this number
-          # is the honest scope of every count below.
-          scanned=$(gh api /installation/repositories --jq .total_count)
-          echo "searching $scanned repositories"
-          if [ "$scanned" -eq 0 ]; then
-            echo "::error::This token can see no repositories, so a count of zero would mean nothing. Check the datum-police installation."
-            exit 1
-          fi
+          days, window = int(os.environ["DAYS"]), int(os.environ["WINDOW"])
+          now = datetime.datetime.now(datetime.timezone.utc)
+          became = now - datetime.timedelta(days=days)
+          opened_after = now - datetime.timedelta(days=window)
 
-          became=$(date -u -d "-${DAYS} days" +%Y-%m-%d)
-          window=$(date -u -d "-${WINDOW} days" +%Y-%m-%d)
+          def api(path):
+              p = subprocess.run(["gh", "api", "--paginate", path],
+                                 capture_output=True, text=True)
+              if p.returncode:
+                  print(f"::error::{path} failed: {p.stderr.strip()}", file=sys.stderr)
+                  sys.exit(1)
+              # --paginate concatenates JSON arrays; gh emits one array per page.
+              out, dec = [], json.JSONDecoder()
+              s = p.stdout.strip()
+              i = 0
+              while i < len(s):
+                  obj, end = dec.raw_decode(s, i)
+                  out.extend(obj if isinstance(obj, list) else obj.get("repositories", []))
+                  i = end
+                  while i < len(s) and s[i] in " \n\r\t":
+                      i += 1
+              return out
 
-          # Drafts are excluded: a draft is somebody saying it is not ready, which
-          # is the opposite of the thing being detected here.
-          #
-          # Two queries, deliberately. The org has 20 pull requests open past the
-          # threshold today, some of them four months old. Listing all of them
-          # every Monday is a channel nobody reads by the second week — the §11
-          # failure, in an alert.
-          #
-          # So the ALERT is about pull requests that went stale THIS WEEK, and the
-          # standing backlog is a number for context. A backlog is a triage
-          # problem, not an alerting one.
-          gh search prs --owner "$OWNER" --state open --draft=false \
-            --created "<=$became" --limit 100 --json number \
-            > "$RUNNER_TEMP/all-stale.json"
-          backlog=$(jq 'length' "$RUNNER_TEMP/all-stale.json")
+          # DELIBERATELY NOT `gh search`. The search API does not reliably honour
+          # a GitHub App installation token for cross-repository queries, and a
+          # search that quietly returns nothing is indistinguishable from a quiet
+          # week. Enumerating what the token can actually see, then listing each
+          # repository's pull requests, uses only endpoints an installation token
+          # is documented to serve.
+          repos = api("/installation/repositories")
+          scanned = len(repos)
+          print(f"searching {scanned} repositories", file=sys.stderr)
+          if scanned == 0:
+              print("::error::This token can see no repositories, so a count of "
+                    "zero would mean nothing. Check the datum-police installation.",
+                    file=sys.stderr)
+              sys.exit(1)
 
-          gh search prs --owner "$OWNER" --state open --draft=false \
-            --created "$window..$became" --limit 50 \
-            --json number,title,repository,createdAt,author \
-            > "$RUNNER_TEMP/stale.json"
+          backlog, fresh = 0, []
+          for r in repos:
+              for pr in api(f"repos/{r['full_name']}/pulls?state=open&per_page=100"):
+                  if pr.get("draft"):
+                      # A draft is somebody saying it is not ready, which is the
+                      # opposite of the thing being detected here.
+                      continue
+                  created = datetime.datetime.fromisoformat(
+                      pr["created_at"].replace("Z", "+00:00"))
+                  if created > became:
+                      continue
+                  backlog += 1
+                  # The ALERT is what crossed the line THIS week. The standing
+                  # backlog is a number for context — listing all of it every
+                  # Monday is a channel nobody reads by the second week.
+                  if created >= opened_after:
+                      fresh.append(
+                          f"• <{pr['html_url']}|{r['name']}#{pr['number']}> — "
+                          f"{pr['title']} _({pr['user']['login']})_")
 
-          count=$(jq 'length' "$RUNNER_TEMP/stale.json")
-          echo "newly stale: $count   standing backlog: $backlog"
+          print(f"newly stale: {len(fresh)}   standing backlog: {backlog}",
+                file=sys.stderr)
 
-          if [ "$count" -eq 0 ]; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "Nothing went stale this week across $scanned repositories. This is the expected result."
-            exit 0
-          fi
+          if not fresh:
+              print("found=false")
+              print(f"::notice::Nothing went stale this week across {scanned} "
+                    f"repositories. This is the expected result.", file=sys.stderr)
+              sys.exit(0)
 
-          {
-            echo "found=true"
-            echo "summary=$count pull request(s) went stale this week ($backlog open past ${DAYS} days across $scanned repositories)"
-            printf 'detail<<DETAIL\n'
-            jq -r '.[] | "• <https://github.com/\(.repository.nameWithOwner)/pull/\(.number)|\(.repository.name)#\(.number)> — \(.title) _(\(.author.login))_"' \
-              "$RUNNER_TEMP/stale.json"
-            printf 'DETAIL\n'
-          } >> "$GITHUB_OUTPUT"
-
-          {
-            echo "### Stale pull requests"
-            echo
-            jq -r '.[] | "- \(.repository.name)#\(.number) — \(.title) (\(.author.login))"' "$RUNNER_TEMP/stale.json"
-          } >> "$GITHUB_STEP_SUMMARY"
+          print("found=true")
+          print(f"summary={len(fresh)} pull request(s) went stale this week "
+                f"({backlog} open past {days} days across {scanned} repositories)")
+          print("detail<<DETAIL")
+          for line in fresh:
+              print(line)
+          print("DETAIL")
+          PY
 
   tell-somebody:
     needs: find
