@@ -1,0 +1,29 @@
+name: datum-police
+
+# The Datum security baseline: Semgrep, gitleaks and a dependency audit, on
+# every pull request.
+#
+# ONE FILE. Nothing else to add, nothing to install, no secrets. The tool
+# versions are pinned inside the workflow this calls, so a run is reproducible
+# without vendoring anything here.
+#
+# It changes nothing about how this repository is built. No commit-message
+# rules, no branch naming, no opinion about languages, layout or tooling.
+# Nothing is published and nothing outside this repository is touched.
+#
+# `datumlabsio/actions` is public, so this works from any organisation.
+#
+# The version below is an exact tag and does not move. To take a newer one,
+# change it — or let Renovate raise it for you by extending the org preset:
+#
+#   { "extends": ["github>datumlabsio/.github"] }
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    uses: datumlabsio/actions/.github/workflows/security-baseline.yml@v0.27.0
