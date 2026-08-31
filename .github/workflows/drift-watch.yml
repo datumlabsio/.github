@@ -1,0 +1,156 @@
+name: drift-watch
+
+# B-61's other half: alert on what cannot be blocked.
+#
+# Some things have no gate. An organisation owner can delete a repository, flip a
+# private one public, or remove a ruleset, and nothing stops them — `administration`
+# has to exist and somebody has to hold it. Prevention is not available, so the
+# answer is detection.
+#
+# THE ORIGINAL DESIGN WAS THE ORGANISATION AUDIT LOG. It is not available:
+#
+#   GET /orgs/datumlabsio/audit-log -> 404
+#
+# That API is GitHub Enterprise Cloud only, and this organisation is not on it.
+# No permission fixes that. So this watches the OUTCOME instead of the event:
+# it reads the current shape of each repository and compares it to what
+# `watched-repos.json` says was decided.
+#
+# Weaker than an audit log — no actor, no timestamp, and a change reverted before
+# the next run is invisible. Stronger in one way: it catches drift however it
+# happened, including by an API call nobody logged as interesting.
+#
+# NOT SCHEDULED YET. Reading rulesets needs organisation `administration: read`
+# on `datum-police`, which has not been granted. A weekly run that cannot read
+# the thing it exists to check would be the fourth green no-op this project has
+# found. Once the permission lands, add:
+#
+#   schedule:
+#     - cron: "0 9 * * 1"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    outputs:
+      summary: ${{ steps.scan.outputs.summary }}
+      detail: ${{ steps.scan.outputs.detail }}
+      found: ${{ steps.scan.outputs.found }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.0.0
+
+      - name: Mint a token that can see the other repositories
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Compare each repository against what was decided
+        id: scan
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          WATCHED: .github/scripts/watched-repos.json
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+
+          owner = os.environ["OWNER"]
+          watched = json.load(open(os.environ["WATCHED"]))["repos"]
+
+          def api(path):
+              """Returns (ok, parsed). ok is False for any non-zero exit."""
+              p = subprocess.run(["gh", "api", path], capture_output=True, text=True)
+              if p.returncode != 0:
+                  return False, p.stderr.strip()
+              return True, json.loads(p.stdout)
+
+          drift, blind = [], []
+
+          for entry in watched:
+              name = entry["name"]
+              full = f"{owner}/{name}"
+
+              ok, repo = api(f"repos/{full}")
+              if not ok:
+                  # 404 here is the loudest thing this job can find.
+                  drift.append(f"*{full}* — cannot be read. Deleted, renamed, or access lost.")
+                  continue
+
+              want = entry["visibility"]
+              got = "private" if repo["private"] else "public"
+              if got != want:
+                  drift.append(f"*{full}* — is {got}, was decided {want}.")
+
+              ok, rulesets = api(f"repos/{full}/rulesets")
+              if not ok:
+                  # NOT swallowed. "No rulesets" and "could not look" are the same
+                  # output unless this is said out loud, and that confusion is
+                  # exactly how a gate ends up reporting success while blind.
+                  blind.append(full)
+                  continue
+
+              names = [r["name"] for r in rulesets]
+              if "protect-main" not in names:
+                  drift.append(f"*{full}* — `protect-main` is gone.")
+                  continue
+
+              rid = next(r["id"] for r in rulesets if r["name"] == "protect-main")
+              ok, rule = api(f"repos/{full}/rulesets/{rid}")
+              if not ok:
+                  blind.append(full)
+                  continue
+              if rule.get("enforcement") != "active":
+                  drift.append(f"*{full}* — `protect-main` is {rule.get('enforcement')}, not active.")
+              if rule.get("bypass_actors"):
+                  who = ", ".join(str(b.get("actor_id")) for b in rule["bypass_actors"])
+                  drift.append(f"*{full}* — `protect-main` now has bypass actors: {who}.")
+
+          checked = len(watched)
+          print(f"checked {checked} repositories")
+
+          if blind:
+              print(f"::error::Could not read rulesets for: {', '.join(blind)}. "
+                    f"This needs organisation 'administration: read' on datum-police. "
+                    f"Refusing to report a clean result while blind to the thing this job checks.")
+              sys.exit(1)
+
+          out = open(os.environ["GITHUB_OUTPUT"], "a")
+          if not drift:
+              out.write("found=false\n")
+              print(f"::notice::All {checked} repositories match what was decided.")
+              sys.exit(0)
+
+          out.write("found=true\n")
+          out.write(f"summary={len(drift)} repository setting(s) changed without a gate, across {checked} watched\n")
+          out.write("detail<<DETAIL\n")
+          for d in drift:
+              out.write(f"• {d}\n")
+          out.write("DETAIL\n")
+          out.close()
+          for d in drift:
+              print(f"::warning::{d}")
+          PY
+
+  # Separate job so a missing webhook cannot mask the finding: `drift` has
+  # already failed or warned in its own log by the time this runs.
+  tell-somebody:
+    needs: drift
+    if: needs.drift.outputs.found == 'true'
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v0.24.0
+    with:
+      summary: ${{ needs.drift.outputs.summary }}
+      detail: ${{ needs.drift.outputs.detail }}
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      severity: warn
+    secrets:
+      webhook: ${{ secrets.SLACK_ALERTS_WEBHOOK }}
