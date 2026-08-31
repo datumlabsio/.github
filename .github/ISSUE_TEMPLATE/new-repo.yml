@@ -10,8 +10,12 @@ body:
         Fill this in and a repository will be created for you — with CI, branch
         protection, ownership and the security gates already set up.
 
-        Someone has to approve it before it is created. You will get a comment on
-        this issue either way.
+        You will get a comment on this issue when it is done, either way.
+
+        **This is one of two ways to get a repository.** If you would rather drive
+        it yourself, run `copier copy gh:datumlabsio/scaffolds <name>` — same
+        template, same result, and you answer the questions in your terminal.
+        Use whichever you prefer.
 
         **Several components in one repository?** Use *Request a monorepo*
         instead — go back and pick it from the list.
@@ -82,5 +86,6 @@ body:
         how to change one.
 
         **What happens next:** a workflow renders the repository from the
-        scaffold and waits for approval. Once approved it creates the repository,
-        pushes the first commit, protects `main`, and comments here with the link.
+        scaffold, creates it, pushes the first commit, protects `main`, and
+        comments here with the link. No approval step — it starts as soon as the
+        label lands.
