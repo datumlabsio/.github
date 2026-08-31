@@ -1,0 +1,18 @@
+{
+  "_comment": [
+    "What the drift watch expects to be true. A repository is listed here because",
+    "somebody decided its shape deliberately — not because it happened to be set",
+    "that way. Adding a repository is a decision; the file is the record of it.",
+    "",
+    "`actions` and `.github` are public ON PURPOSE: `.github` serves org defaults,",
+    "and `actions` holds reusable workflows other orgs' repos call. Everything else",
+    "is private. So this cannot be a blanket 'must be private' rule."
+  ],
+  "repos": [
+    { "name": "actions",         "visibility": "public"  },
+    { "name": "scaffolds",       "visibility": "private" },
+    { "name": ".github",         "visibility": "public"  },
+    { "name": "datum-standards", "visibility": "private" },
+    { "name": "polaris",         "visibility": "private" }
+  ]
+}
