@@ -115,6 +115,21 @@ jobs:
           ARCHETYPE: ${{ steps.detect.outputs.archetype }}
         run: |
           set -euo pipefail
+
+          # copier shells out to its own `git clone`, and the scaffold is PRIVATE.
+          # actions/checkout's credential is local to the clone IT made, so
+          # without this the template clone gets nothing and git asks for a
+          # username on a machine with no terminal:
+          #
+          #   fatal: could not read Username for 'https://github.com'
+          #
+          # actions/CLAUDE.md records this as rediscovered four times before it
+          # was written down. This was the fifth. new-repo.yml already does
+          # exactly this, six steps away, and it still had to be hit here.
+          git config --global \
+            url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+
           tag=$(gh api "repos/$OWNER/scaffolds/releases/latest" -q .tag_name)
           echo "::notice::Rendering from scaffolds $tag"
 
