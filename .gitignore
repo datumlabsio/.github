@@ -1,0 +1,15 @@
+# This repository had none, which is why a __pycache__ directory reached main:
+# the scripts here are run directly by workflows and by their own tests, and a
+# `git add -A` after a local test run picks up whatever Python left behind.
+#
+# `scaffolds` and `actions` both carried this rule already. This repository is
+# the one that did not, and it is the one that leaked.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Editor and OS noise
+.DS_Store
+*.swp
