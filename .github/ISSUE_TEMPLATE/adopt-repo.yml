@@ -1,0 +1,66 @@
+name: Adopt an existing repository
+description: Put the standard on a repository that already has code in it.
+title: "Adopt: "
+labels: ["adopt-request"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This puts the gates on a repository that already exists — CI, pre-commit,
+        linters, CODEOWNERS, renovate, security scanning, `CLAUDE.md`.
+
+        **You will get a pull request, not a change.** Nothing lands until someone
+        on that repository merges it. Every file the repository already has is
+        kept untouched.
+
+        **Every CI gate arrives switched off.** A codebase that never had gates
+        will fail several on the first run — turn them on one per pull request
+        afterwards, in this order: lint, types, tests, coverage.
+
+        **Nothing happens until a maintainer applies the `adopt-request` label.**
+        Opening this issue is a request, not the trigger.
+
+        Creating a *new* repository instead? Use *Request a repository*.
+
+  - type: input
+    id: repo_name
+    attributes:
+      label: Repository name
+      description: Just the name, no `datumlabsio/` prefix. It must already exist.
+      placeholder: ember
+    validations:
+      required: true
+
+  - type: input
+    id: owning_team
+    attributes:
+      label: Owning team
+      description: >-
+        The GitHub team, without the `@datumlabsio/` prefix. It becomes CODEOWNERS,
+        and it must already hold write access — GitHub silently ignores a
+        CODEOWNERS entry naming a team without it, so reviews would never be
+        requested and nothing would look wrong.
+      placeholder: datum-core
+    validations:
+      required: true
+
+  - type: dropdown
+    id: archetype
+    attributes:
+      label: Repository type — only if the detected one is wrong
+      description: >-
+        Leave this alone. The workflow reads the type off the files already in the
+        repository and says what it found. Set it only to override a wrong guess.
+      options:
+        - detect it for me
+        - application
+        - web-app
+        - dbt-project
+        - dlt-pipeline
+        - gitops
+        - docs
+        - monorepo
+        - generic
+    validations:
+      required: false

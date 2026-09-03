@@ -286,6 +286,30 @@ jobs:
 
           echo "url=https://github.com/$OWNER/$NAME" >> "$GITHUB_OUTPUT"
 
+      # ADVISORY. A repository born from the scaffold IS conformant, and the
+      # property is how anything else finds that out -- the conformance audit,
+      # coverage reporting, and any ruleset that ever targets adopted
+      # repositories. Without it a new repository is conformant and INVISIBLE,
+      # which is exactly the gap that makes the adoption count wrong.
+      #
+      # It does not fail the job. A missing label must not undo a repository that
+      # has already been created, pushed and protected.
+      - name: Record that it was born conformant
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.scribe.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ steps.request.outputs.repo_name }}
+        run: |
+          set -euo pipefail
+          if gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
+               -f 'properties[][property_name]=datum-standard' \
+               -f 'properties[][value]=adopted' >/dev/null 2>&1; then
+            echo "::notice::Set datum-standard=adopted on $NAME."
+          else
+            echo "::warning::Could not set datum-standard on $NAME. Define the property in the organisation schema, or grant the App custom-properties write. The repository itself is unaffected."
+          fi
+
       - name: Tell the requester
         if: always()
         env:

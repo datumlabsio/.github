@@ -1,0 +1,254 @@
+name: adopt-repo
+
+# B-79. A repository that already exists is ADOPTED, not hand-assembled.
+#
+# Adoption failed for a boring reason: eight files to copy in by hand, and
+# forgetting one is silent -- the repository looks adopted and a gate never runs.
+# scaffolds made it one `copier` command, which was still the wrong unit: one
+# repository, one laptop, one human, for 59 live repositories.
+#
+# And copier cannot answer its own questions. Its Jinja context exposes the
+# destination as a PurePosixPath with no filesystem access, `_external_data`
+# parses what it reads as YAML and dies on a pyproject.toml, and a Jinja
+# extension has to be pip-installed alongside copier rather than shipped in the
+# template. All three were measured. A shell step before copier has none of those
+# problems, which is the real reason this belongs here rather than on a laptop.
+#
+# THE LABEL IS THE SECURITY BOUNDARY. This repository is PUBLIC, so anyone with a
+# GitHub account can open an issue in it. Applying a label needs triage or write,
+# which no outside collaborator holds. That is why the trigger is `labeled` and
+# never `opened` -- the same guard new-repo.yml already relies on.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  adopt:
+    # The label is applied by a person, so the trigger is already a decision.
+    if: github.event.label.name == 'adopt-request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # datum-police, NOT datum-repo-factory. Adoption creates no repository and
+      # must not be able to: it needs `contents` and `pull_requests` to open a
+      # pull request, `workflows` because the branch carries .github/workflows
+      # files, and `issues` to report back here. The factory App holds
+      # `administration` and is deliberately reachable from one job only.
+      - name: Mint a token
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Read the request
+        id: request
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          TRIGGER_LABEL: adopt-request
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check pyyaml
+          python3 .github/scripts/parse-request.py
+
+      - name: Check out the repository being adopted
+        id: target
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ steps.request.outputs.repo_name }}
+        run: |
+          set -euo pipefail
+          if ! gh repo clone "$OWNER/$NAME" "$RUNNER_TEMP/target" -- --quiet 2>/dev/null; then
+            echo "::error::Cannot reach $OWNER/$NAME. It may not exist, or datum-police may not be installed on it."
+            exit 1
+          fi
+
+          # Already adopted. Re-running would open a pull request that changes
+          # nothing, and `copier update` is the right tool for a repository that
+          # already carries answers.
+          if [ -f "$RUNNER_TEMP/target/.copier-answers.yml" ]; then
+            echo "::error::$NAME already carries .copier-answers.yml — it is adopted. Use scaffold-update to move it forward."
+            exit 1
+          fi
+
+          branch="adopt/datum-standard-$(date -u +%Y%m%d)"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Work out what kind of repository this is
+        id: detect
+        env:
+          OVERRIDE: ${{ steps.request.outputs.archetype }}
+        run: |
+          set -euo pipefail
+          detected=$(python3 .github/scripts/detect_archetype.py "$RUNNER_TEMP/target")
+
+          # The form's dropdown defaults to a sentence, not an archetype. Anything
+          # that is not a real choice means "you decide".
+          case "$OVERRIDE" in
+            application|web-app|dbt-project|dlt-pipeline|gitops|docs|monorepo|generic)
+              echo "::notice::Detected '$detected', overridden to '$OVERRIDE' by the request."
+              echo "archetype=$OVERRIDE" >> "$GITHUB_OUTPUT"
+              echo "how=overridden in the request (detection said \`$detected\`)" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "archetype=$detected" >> "$GITHUB_OUTPUT"
+              echo "how=detected from the files already in the repository" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Land the standard
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ steps.request.outputs.repo_name }}
+          TEAM: ${{ steps.request.outputs.owning_team }}
+          ARCHETYPE: ${{ steps.detect.outputs.archetype }}
+        run: |
+          set -euo pipefail
+          tag=$(gh api "repos/$OWNER/scaffolds/releases/latest" -q .tag_name)
+          echo "::notice::Rendering from scaffolds $tag"
+
+          pipx install copier >/dev/null 2>&1 || python3 -m pip install --quiet copier
+
+          # --defaults answers everything that was not supplied, which is the whole
+          # point of running this here: nobody is at a terminal to be prompted.
+          copier copy --defaults --vcs-ref "$tag" \
+            -d retrofit=true \
+            -d "archetype=$ARCHETYPE" \
+            -d "repo_name=$NAME" \
+            -d "owning_team=$TEAM" \
+            -d "repo_description=$(gh api "repos/$OWNER/$NAME" -q '.description // ""')" \
+            "gh:$OWNER/scaffolds" "$RUNNER_TEMP/target"
+
+      # Asserted rather than trusted. A retrofit that quietly modified the
+      # repository's own files would be discovered by whoever reviews the pull
+      # request, which is too late to be a control.
+      - name: The retrofit only added
+        id: diff
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/target"
+          touched=$(git status --porcelain | grep -vE '^\?\? ' || true)
+          if [ -n "$touched" ]; then
+            echo "::error::The retrofit modified or deleted files it should not have:"
+            echo "$touched"
+            exit 1
+          fi
+          count=$(git status --porcelain | grep -c '^?? ' || true)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::Nothing to add — the repository already has everything, or the render produced nothing."
+            exit 1
+          fi
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "::notice::$count files to add, 0 modified, 0 deleted."
+
+      - name: Open the pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ steps.request.outputs.repo_name }}
+          TEAM: ${{ steps.request.outputs.owning_team }}
+          ARCHETYPE: ${{ steps.detect.outputs.archetype }}
+          HOW: ${{ steps.detect.outputs.how }}
+          COUNT: ${{ steps.diff.outputs.count }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          ISSUE: ${{ github.event.issue.number }}
+          REQUESTER: ${{ github.event.issue.user.login }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/target"
+          git config user.name "datum-police[bot]"
+          git config user.email "datum-police[bot]@users.noreply.github.com"
+          git checkout -q -b "$BRANCH"
+          git add -A
+          git commit -q -m "feat: adopt the Datum engineering standard
+
+          Requested in ${OWNER}/.github#${ISSUE} by @${REQUESTER}.
+
+          Archetype \`${ARCHETYPE}\` — ${HOW}.
+
+          ${COUNT} files added, nothing modified, nothing deleted."
+          git push -q origin "$BRANCH"
+
+          cat > /tmp/body.md <<BODY
+          Adopting the Datum engineering standard. Requested in ${OWNER}/.github#${ISSUE} by @${REQUESTER}.
+
+          **${COUNT} files added. Nothing modified, nothing deleted** — asserted in CI before this pull request was opened, not just intended.
+
+          Archetype \`${ARCHETYPE}\`, ${HOW}. If that is wrong, close this and re-request with the type set explicitly; the linter configs are the only thing it decides.
+
+          ## Every CI gate arrives switched off
+
+          On purpose. A codebase that never had gates fails several on the first run, and a wall of red teaches people to ignore the check — which you do not get back by fixing the repository afterwards.
+
+          Turn them on **one per pull request**, in this order: lint, then types, then tests, then coverage.
+
+          ## What this does not do for you
+
+          - \`CLAUDE.md\` is written only if you had none. It is prose about *this* codebase — replace the skeleton.
+          - Coverage config still points at \`src/\`. Point it at your real package before switching coverage on.
+          - Your \`README\`, \`pyproject.toml\`, \`package.json\` and the rest were left exactly as they were.
+
+          Questions: \`#datum-standards\`, or comment here.
+          BODY
+
+          url=$(gh pr create --repo "$OWNER/$NAME" --base "$(gh api "repos/$OWNER/$NAME" -q .default_branch)" \
+            --head "$BRANCH" --title "feat: adopt the Datum engineering standard" --body-file /tmp/body.md)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # ADVISORY. The property is how the conformance audit and anything else
+      # answers "is this repository meant to be conformant?" -- but it is not what
+      # makes adoption real, the merge is. If the schema has not been defined at
+      # organisation level, or the App cannot write properties, say so and carry
+      # on: a missing label must not throw away a pull request that already exists.
+      - name: Record the intent
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ steps.request.outputs.repo_name }}
+        run: |
+          set -euo pipefail
+          if gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
+               -f 'properties[][property_name]=datum-standard' \
+               -f 'properties[][value]=adopted' >/dev/null 2>&1; then
+            echo "::notice::Set datum-standard=adopted on $NAME."
+          else
+            echo "::warning::Could not set datum-standard on $NAME. Define the property in the organisation's custom-property schema, or grant datum-police custom-properties write. The pull request is unaffected."
+          fi
+
+      - name: Say what happened
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          URL: ${{ steps.pr.outputs.url }}
+          ARCHETYPE: ${{ steps.detect.outputs.archetype }}
+          COUNT: ${{ steps.diff.outputs.count }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "${URL:-}" ]; then
+            gh issue comment "$ISSUE" --repo "$REPO" --body "Done — $URL
+
+          Detected \`$ARCHETYPE\`, added $COUNT files, modified nothing.
+
+          **It is not adopted until that pull request is merged.** Every CI gate is off; turn them on one per pull request."
+            gh issue close "$ISSUE" --repo "$REPO" --reason completed
+          else
+            gh issue comment "$ISSUE" --repo "$REPO" --body "That did not work — [see the run]($RUN).
+
+          Nothing was changed on the target repository. Fix what the log reports and re-apply the \`adopt-request\` label to try again."
+          fi
