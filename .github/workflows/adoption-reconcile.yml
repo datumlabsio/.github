@@ -18,9 +18,15 @@ name: adoption-reconcile
 
 on:
   schedule:
-    # Hourly. A merged adoption should not wait a day to be protected, and the
-    # sweep is a few hundred cheap API calls.
-    - cron: "17 * * * *"
+    # Daily, early. This started hourly, which was 168 times the cadence of
+    # anything else in this repository -- renovate and stale-prs both run weekly
+    # on Monday -- for something that changes a few times a week.
+    #
+    # Not weekly, though: the property gates branch protection through an
+    # organisation ruleset, and a repository adopted on Tuesday should not sit
+    # unprotected until the following Monday. Daily is the point where the lag
+    # stops mattering and the noise stops being silly.
+    - cron: "17 5 * * *"
   workflow_dispatch:
     inputs:
       apply:
