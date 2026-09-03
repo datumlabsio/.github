@@ -69,3 +69,9 @@ jobs:
       # nothing at all.
       - name: The reconciler can only ever mark a repository adopted
         run: python3 .github/scripts/test_reconcile_adoption.py
+
+      # --defaults answers the questions and nothing about an existing FILE.
+      # copier stops to ask, there is no terminal, and the run dies -- which is
+      # what happened to dl-assessment-platform on pnpm-workspace.yaml.
+      - name: A retrofit can never stop to ask about a file
+        run: python3 .github/scripts/test_adopt_never_prompts.py
