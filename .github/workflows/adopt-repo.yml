@@ -135,9 +135,19 @@ jobs:
 
           pipx install copier >/dev/null 2>&1 || python3 -m pip install --quiet copier
 
-          # --defaults answers everything that was not supplied, which is the whole
-          # point of running this here: nobody is at a terminal to be prompted.
-          copier copy --defaults --vcs-ref "$tag" \
+          # --defaults answers the QUESTIONS. It does nothing about a FILE that
+          # already exists: copier stops and asks, and there is no terminal, so
+          # the run dies. dl-assessment-platform hit it on pnpm-workspace.yaml.
+          #
+          # --skip '*' is the whole semantics of a retrofit in one flag: never
+          # touch anything that is already there. The template's
+          # _skip_if_exists lists eleven files, which was eleven guesses made by
+          # looking at one Python repository -- the template can ship 38, and the
+          # first web-app repository found one of the other 27.
+          #
+          # It is also why this cannot be fixed by adding to that list: the list
+          # would have to be complete, forever, for every archetype.
+          copier copy --defaults --skip '*' --vcs-ref "$tag" \
             -d retrofit=true \
             -d "archetype=$ARCHETYPE" \
             -d "repo_name=$NAME" \
