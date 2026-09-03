@@ -1,0 +1,61 @@
+name: adoption-reconcile
+
+# B-79. `datum-standard: adopted` means the standard is ON the default branch --
+# not that somebody asked for it.
+#
+# The adoption workflow used to set it when it opened the pull request. That was
+# wrong: an organisation ruleset is keyed on this property, so a repository was
+# marked adopted and branch-protected while its pull request sat unreviewed.
+#
+# A sweep rather than a webhook, because it CONVERGES. A pull request merged
+# while this is down is picked up next run; a repository adopted by hand is
+# picked up without anybody remembering; a property removed by accident comes
+# back. An event handler gets exactly one chance.
+#
+# It can only ever SET `adopted`, and only where the marker is on the default
+# branch. It never clears a value and never writes `exempt` -- which matters,
+# because a job that could clear this property could unprotect a repository.
+
+on:
+  schedule:
+    # Hourly. A merged adoption should not wait a day to be protected, and the
+    # sweep is a few hundred cheap API calls.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write the property. Off means report only."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Mint a token
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      # The scheduled run applies. A manual run reports unless asked otherwise,
+      # so anyone can see what it would do without doing it.
+      - name: Reconcile
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.apply }}" = "true" ]; then
+            python3 .github/scripts/reconcile_adoption.py --apply
+          else
+            python3 .github/scripts/reconcile_adoption.py
+          fi
