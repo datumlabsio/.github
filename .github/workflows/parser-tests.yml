@@ -61,3 +61,11 @@ jobs:
       # production six steps away from the workflow that does it correctly.
       - name: Every copier step can actually reach the private scaffold
         run: python3 .github/scripts/test_copier_has_a_credential.py
+
+      # The property gates branch protection through an organisation ruleset, so
+      # a job that could clear it could unprotect a repository. These assert it
+      # cannot -- and that the marker check is a query string, since `-f ref=` on
+      # a GET 404s and made the first version report success having checked
+      # nothing at all.
+      - name: The reconciler can only ever mark a repository adopted
+        run: python3 .github/scripts/test_reconcile_adoption.py

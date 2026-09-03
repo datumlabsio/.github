@@ -216,6 +216,8 @@ jobs:
           - Coverage config still points at \`src/\`. Point it at your real package before switching coverage on.
           - Your \`README\`, \`pyproject.toml\`, \`package.json\` and the rest were left exactly as they were.
 
+          Once this merges, \`datum-standard: adopted\` is set on the repository within the hour, and the organisation ruleset that protects adopted repositories starts applying. Nothing to do — a scheduled job reconciles it.
+
           Questions: \`#datum-standards\`, or comment here.
           BODY
 
@@ -227,27 +229,6 @@ jobs:
           url=$(gh pr create --repo "$OWNER/$NAME" --base "$(gh api "repos/$OWNER/$NAME" -q .default_branch)" \
             --head "$BRANCH" --title "feat: adopt the Datum engineering standard" --body-file /tmp/body.md)
           echo "url=$url" >> "$GITHUB_OUTPUT"
-
-      # ADVISORY. The property is how the conformance audit and anything else
-      # answers "is this repository meant to be conformant?" -- but it is not what
-      # makes adoption real, the merge is. If the schema has not been defined at
-      # organisation level, or the App cannot write properties, say so and carry
-      # on: a missing label must not throw away a pull request that already exists.
-      - name: Record the intent
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-          OWNER: ${{ github.repository_owner }}
-          NAME: ${{ steps.request.outputs.repo_name }}
-        run: |
-          set -euo pipefail
-          if gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
-               -f 'properties[][property_name]=datum-standard' \
-               -f 'properties[][value]=adopted' >/dev/null 2>&1; then
-            echo "::notice::Set datum-standard=adopted on $NAME."
-          else
-            echo "::warning::Could not set datum-standard on $NAME. Define the property in the organisation's custom-property schema, or grant datum-police custom-properties write. The pull request is unaffected."
-          fi
 
       - name: Say what happened
         if: always()
