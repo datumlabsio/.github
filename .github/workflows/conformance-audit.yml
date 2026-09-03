@@ -57,3 +57,49 @@ jobs:
     secrets:
       app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
       private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+
+  # B-79. `datum-standard: adopted` means the standard is ON the default branch,
+  # not that somebody asked for it -- adopt-repo.yml used to set it when it
+  # OPENED the pull request, which marked a repository adopted, and
+  # branch-protected under the organisation ruleset keyed on it, while the pull
+  # request sat unreviewed.
+  #
+  # HERE rather than in a workflow of its own. This one already runs on this
+  # cadence, already holds the token, and already reads `.copier-answers.yml`.
+  # A second schedule to notice the same file is a second thing to forget about
+  # -- and the one I wrote started hourly, 168 times anything else in this
+  # repository, for something that changes a few times a week.
+  # `workflow_dispatch` covers wanting it now.
+  #
+  # It can only ever SET `adopted`, and only where the marker is on the default
+  # branch. It never clears a value and never writes `exempt`: the property gates
+  # branch protection, so a job that could clear it could unprotect a repository.
+  adoption:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Mint a token
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      # Follows the audit's own dry-run input, so one switch governs both:
+      # a manual run reports, the scheduled run acts.
+      - name: Mark what is actually adopted
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.dry-run }}" = "false" ]; then
+            python3 .github/scripts/reconcile_adoption.py --apply
+          else
+            python3 .github/scripts/reconcile_adoption.py
+          fi
