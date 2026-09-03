@@ -21,6 +21,12 @@ body:
         **Nothing happens until a maintainer applies the `adopt-request` label.**
         Opening this issue is a request, not the trigger.
 
+        **The repository must be added to the `datum-police` App first**, or the
+        run cannot reach it and stops with exactly that message. The App is
+        installed on selected repositories on purpose — it holds write access,
+        and being deliberate about where it reaches is the point. Adding a
+        repository is the first step of adopting it, not an obstacle to it.
+
         Creating a *new* repository instead? Use *Request a repository*.
 
   - type: input

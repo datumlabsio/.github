@@ -54,3 +54,10 @@ jobs:
       # negative one: a clean repository must produce no output at all.
       - name: Adoption warnings fire only on real conditions
         run: python3 .github/scripts/test_adoption_warnings.py
+
+      # copier shells out to its own git clone and the scaffold is PRIVATE.
+      # actions/CLAUDE.md records this as rediscovered four times before it was
+      # written down; writing it down did not stop the fifth, which failed in
+      # production six steps away from the workflow that does it correctly.
+      - name: Every copier step can actually reach the private scaffold
+        run: python3 .github/scripts/test_copier_has_a_credential.py
