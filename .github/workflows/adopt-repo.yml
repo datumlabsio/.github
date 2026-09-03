@@ -240,6 +240,31 @@ jobs:
             --head "$BRANCH" --title "feat: adopt the Datum engineering standard" --body-file /tmp/body.md)
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      # Set HERE, not only by the weekly sweep. It was moved to the sweep so
+      # `adopted` would mean "merged" rather than "asked" -- correct in
+      # principle, and it meant a repository adopted on Tuesday had no property
+      # and no protection until the following Monday. Waiting six days to find
+      # out whether adoption worked is worse than the imprecision.
+      #
+      # The sweep in conformance-audit stays, as the corrector rather than the
+      # only writer: it re-asserts this weekly and picks up anything adopted by
+      # hand.
+      - name: Mark it adopted
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ steps.request.outputs.repo_name }}
+        run: |
+          set -euo pipefail
+          if gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
+               -f 'properties[][property_name]=datum-standard' \
+               -f 'properties[][value]=adopted' >/dev/null 2>&1; then
+            echo "::notice::Set datum-standard=adopted on $NAME. The organisation ruleset applies from now."
+          else
+            echo "::warning::Could not set datum-standard on $NAME — datum-police needs custom-properties write. The pull request is unaffected, and the weekly audit will set it once that permission exists."
+          fi
+
       - name: Say what happened
         if: always()
         env:
