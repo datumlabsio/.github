@@ -128,6 +128,7 @@ jobs:
             -d "repo_name=$NAME" \
             -d "owning_team=$TEAM" \
             -d "repo_description=$(gh api "repos/$OWNER/$NAME" -q '.description // ""')" \
+            -d "default_branch=$(gh api "repos/$OWNER/$NAME" -q .default_branch)" \
             "gh:$OWNER/scaffolds" "$RUNNER_TEMP/target"
 
       # Asserted rather than trusted. A retrofit that quietly modified the
@@ -202,6 +203,11 @@ jobs:
 
           Questions: \`#datum-standards\`, or comment here.
           BODY
+
+          # Computed from THIS repository, so every line is a thing that is
+          # really wrong here. Boilerplate caveats get skimmed, and the one that
+          # mattered gets skimmed along with them.
+          python3 "$GITHUB_WORKSPACE/.github/scripts/adoption_warnings.py" . >> /tmp/body.md || true
 
           url=$(gh pr create --repo "$OWNER/$NAME" --base "$(gh api "repos/$OWNER/$NAME" -q .default_branch)" \
             --head "$BRANCH" --title "feat: adopt the Datum engineering standard" --body-file /tmp/body.md)

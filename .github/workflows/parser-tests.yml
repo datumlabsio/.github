@@ -48,3 +48,9 @@ jobs:
       # markers in subdirectories.
       - name: The archetype detector does not guess quietly
         run: python3 .github/scripts/test_detect_archetype.py
+
+      # A pull request full of boilerplate caveats gets skimmed, and the one that
+      # mattered gets skimmed with it. The case that matters most here is the
+      # negative one: a clean repository must produce no output at all.
+      - name: Adoption warnings fire only on real conditions
+        run: python3 .github/scripts/test_adoption_warnings.py
