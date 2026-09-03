@@ -68,7 +68,7 @@ def build_body(form: Path, answers: dict[str, object]) -> str:
     return "\n".join(out)
 
 
-def run(body: str, templates: Path | None = None) -> tuple[int, dict[str, str], str]:
+def run(body: str, templates: Path | None = None, label: str | None = None) -> tuple[int, dict[str, str], str]:
     """Run the parser exactly as the workflow does, in a throwaway working dir."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -88,10 +88,12 @@ def run(body: str, templates: Path | None = None) -> tuple[int, dict[str, str], 
             [sys.executable, ".github/scripts/parse-request.py"],
             cwd=work,
             env={
-                **os.environ,
+                **{k: v for k, v in os.environ.items() if k != "TRIGGER_LABEL"},
                 "ISSUE_BODY": body,
                 "GITHUB_OUTPUT": str(out_file),
                 "RUNNER_TEMP": str(runner_tmp),
+                # Unset means the default, which is what repo-request relies on.
+                **({"TRIGGER_LABEL": label} if label else {}),
             },
             capture_output=True,
             text=True,
@@ -239,6 +241,75 @@ def _():
     rc, a, log = run(build_body(SINGLE, {**BASE, "repo_name": "Acme Insights", "archetype": "docs"}))
     assert rc != 0, f"accepted: {a}"
     assert "not a usable repository name" in log, log
+
+
+# ------------------------------------------------- adopting a repo that exists
+#
+# B-79. The adopt form reuses this parser rather than forking it -- the docstring
+# is right that a second copy drifts silently. Two things in the parser were
+# hardcoded to the repo-request form and rejected every valid adopt request: the
+# required-field list, and a direct a['repo_description'] on the way out. Both now
+# read from the form definition instead.
+#
+# The regression that matters runs the other way. Repo creation is a live path;
+# breaking it to add adoption would be a bad trade nobody notices until somebody
+# cannot get a repository.
+
+ADOPT = {"repo_name": "ember", "owning_team": "datum-core"}
+
+
+@case("an adopt request parses")
+def _():
+    code, args, log = run(build_body(TEMPLATES / "adopt-repo.yml", ADOPT),
+                          label="adopt-request")
+    assert code == 0, log
+    assert args["repo_name"] == "ember", args
+    assert args["owning_team"] == "datum-core", args
+
+
+@case("adoption never asks for a description, and does not need one")
+def _():
+    # On a retrofit the description feeds only README.md, CLAUDE.md and
+    # pyproject.toml, all of which are skip_if_exists, so the answer is
+    # discarded. A hardcoded required list rejected the request outright.
+    code, _args, log = run(build_body(TEMPLATES / "adopt-repo.yml", ADOPT),
+                           label="adopt-request")
+    assert code == 0, log
+    assert "missing" not in log.lower(), log
+
+
+@case("an adopt request with no repo name is REFUSED, not crashed")
+def _():
+    # A non-zero exit is not enough on its own. With the required set emptied the
+    # request is accepted and then dies on a KeyError -- identical from outside,
+    # and it tells the requester nothing.
+    code, _args, log = run(
+        build_body(TEMPLATES / "adopt-repo.yml", {"owning_team": "datum-core"}),
+        label="adopt-request")
+    assert code != 0, "a nameless adopt request was accepted"
+    assert "Traceback" not in log, f"crashed instead of refusing:\n{log}"
+    assert "missing" in log.lower(), log
+
+
+@case("the archetype dropdown left alone does not become a real archetype")
+def _():
+    # Detection decides it. A dropdown nobody touched must not silently override
+    # detection with a value no one chose.
+    code, args, log = run(build_body(TEMPLATES / "adopt-repo.yml", ADOPT),
+                          label="adopt-request")
+    assert code == 0, log
+    assert args.get("archetype") not in {
+        "application", "web-app", "dbt-project", "dlt-pipeline", "gitops", "docs",
+    }, args
+
+
+@case("repo-request is untouched by all of the above  [control case]")
+def _():
+    code, args, log = run(build_body(TEMPLATES / "new-repo.yml",
+                                     {**BASE, "archetype": "application"}))
+    assert code == 0, log
+    assert args["repo_name"] == "acme-insights", args
+    assert args["repo_description"] == BASE["repo_description"], args
 
 
 # --------------------------------------- the two questions nobody was asked

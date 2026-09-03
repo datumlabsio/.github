@@ -24,7 +24,11 @@ TEMPLATES = Path(".github/ISSUE_TEMPLATE")
 # The contract between a form and this script is the LABEL, never the filename.
 # Forms are found by the label they apply to the issue, which is also what the
 # workflow triggers on.
-TRIGGER_LABEL = "repo-request"
+# Overridable so the adopt form can reuse this script rather than fork it. The
+# docstring above is right that a second copy would drift silently; a second
+# LABEL costs one environment variable. Defaults to the repo-request behaviour,
+# so nothing that already calls this changes.
+TRIGGER_LABEL = os.environ.get("TRIGGER_LABEL", "repo-request")
 
 # How GitHub renders a field nobody filled in. It is NOT one string — it
 # depends on the field type, which was learned the hard way:
@@ -78,6 +82,10 @@ def forms() -> dict[Path, dict[str, str]]:
                 fields[label.strip()] = {
                     "id": fid,
                     "type": block.get("type"),
+                    # What the browser already enforces. Carried through so the
+                    # required set is read from the form rather than hardcoded,
+                    # which was correct for exactly one form.
+                    "required": bool((block.get("validations") or {}).get("required")),
                     "options": [
                         o if isinstance(o, str) else (o or {}).get("label")
                         for o in (attrs.get("options") or [])
@@ -234,7 +242,11 @@ def main() -> int:
     if "has_proposals" in a:
         a["has_proposals"] = bool(a["has_proposals"])
 
-    required = ["repo_name", "repo_description", "owning_team", "archetype"]
+    # Read out of the form that was used. A fixed list was right for exactly one
+    # form: the adopt form has no `repo_description` -- on a retrofit it only
+    # feeds files that are skip_if_exists -- and the fixed list rejected every
+    # valid adopt request.
+    required = sorted(f["id"] for f in defs[form].values() if f.get("required"))
     missing = [r for r in required if r not in a]
     if missing:
         print(f"::error::The request is missing: {', '.join(missing)}.")
@@ -263,7 +275,12 @@ def main() -> int:
 
     Path(os.environ["GITHUB_OUTPUT"]).open("a").write(
         f"repo_name={name}\n"
-        f"description={a['repo_description']}\n"
+        # Not every form has one. The adopt form does not: on a retrofit
+        # the description only feeds files that are skip_if_exists, so it
+        # is collected and then discarded.
+        f"description={a.get('repo_description', '')}\n"
+        f"owning_team={a.get('owning_team', '')}\n"
+        f"archetype={a.get('archetype', '')}\n"
         f"answers={json.dumps(a)}\n"
     )
 

@@ -37,3 +37,14 @@ jobs:
 
       - name: The parser still reads what the forms produce
         run: python3 tests/test_parse_request.py
+
+      # B-79. Adoption reads the archetype off the repository instead of asking,
+      # because copier cannot: its Jinja context has no filesystem access,
+      # _external_data dies parsing a pyproject.toml as YAML, and a Jinja
+      # extension has to be pip-installed rather than shipped in the template.
+      # A wrong answer here lands the wrong linter config in a pull request --
+      # cheap and visible. A CONFIDENT wrong answer is the one to prevent: a
+      # root-only scan called polaris "generic" because a monorepo keeps its
+      # markers in subdirectories.
+      - name: The archetype detector does not guess quietly
+        run: python3 .github/scripts/test_detect_archetype.py
