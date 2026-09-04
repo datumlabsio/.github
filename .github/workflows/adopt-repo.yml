@@ -81,7 +81,15 @@ jobs:
             exit 1
           fi
 
-          branch="adopt/datum-standard-$(date -u +%Y%m%d)"
+          # The run id, not just the date. A date-only name collides with itself
+          # the second time a repository is adopted on the same day -- and the
+          # collision surfaces at the PUSH, the very last step, after everything
+          # else has succeeded. "Adopt it, look at it, close it, adopt it again"
+          # is the normal way to evaluate this, and it was guaranteed to fail.
+          #
+          # Closing a pull request does not delete its branch, so the stale one
+          # outlives the attempt that made it.
+          branch="adopt/datum-standard-$(date -u +%Y%m%d)-${GITHUB_RUN_ID}"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
       - name: Work out what kind of repository this is
