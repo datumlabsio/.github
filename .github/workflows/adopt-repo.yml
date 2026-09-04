@@ -60,6 +60,24 @@ jobs:
           python3 -m pip install --quiet --disable-pip-version-check pyyaml
           python3 .github/scripts/parse-request.py
 
+      # Everything outside this workflow that has to be true, checked at once.
+      #
+      # Adoption failed SIX times on real repositories and not one failure was
+      # in the code: a missing label, an App not installed, a git credential, a
+      # branch name, a property's edit permission, a secret's repository scope.
+      # Each was found by running the whole thing and reading a log, and each fix
+      # only revealed the next one. Six runs to learn six facts.
+      #
+      # This reports ALL of them together and fails before doing any work, so
+      # they can be fixed in one pass instead of six.
+      - name: Preflight
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ steps.request.outputs.repo_name }}
+          TEAM: ${{ steps.request.outputs.owning_team }}
+        run: ./.github/scripts/preflight.sh "$OWNER" "$NAME" "$TEAM"
+
       - name: Check out the repository being adopted
         id: target
         env:
@@ -314,6 +332,8 @@ jobs:
             gh issue close "$ISSUE" --repo "$REPO" --reason completed
           else
             gh issue comment "$ISSUE" --repo "$REPO" --body "That did not work — [see the run]($RUN).
+
+          If it stopped at **Preflight**, that step lists every prerequisite that is missing, all of them at once. Fix them together and re-apply the label.
 
           Nothing was changed on the target repository. Fix what the log reports and re-apply the \`adopt-request\` label to try again."
           fi
