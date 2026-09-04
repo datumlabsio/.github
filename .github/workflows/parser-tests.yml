@@ -75,3 +75,21 @@ jobs:
       # what happened to dl-assessment-platform on pnpm-workspace.yaml.
       - name: A retrofit can never stop to ask about a file
         run: python3 .github/scripts/test_adopt_never_prompts.py
+
+      # The preflight is the difference between one report and six discovered
+      # failures. It has to be syntactically valid and it has to be wired in.
+      - name: The preflight runs before anything is done
+        run: |
+          bash -n .github/scripts/preflight.sh
+          grep -q 'preflight.sh' .github/workflows/adopt-repo.yml \
+            || { echo "::error::adopt-repo.yml does not call preflight.sh"; exit 1; }
+          python3 - <<'CHECK'
+          import re, sys
+          wf = open(".github/workflows/adopt-repo.yml").read()
+          steps = [m.start() for m in re.finditer(r"^      - name: ", wf, re.M)]
+          pre = wf.index("preflight.sh")
+          land = wf.index("Land the standard")
+          if pre > land:
+              sys.exit("::error::Preflight runs AFTER the work. It exists to fail first.")
+          print("preflight runs before the work")
+          CHECK
