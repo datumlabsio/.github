@@ -265,12 +265,32 @@ jobs:
           NAME: ${{ steps.request.outputs.repo_name }}
         run: |
           set -euo pipefail
-          if gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
-               -f 'properties[][property_name]=datum-standard' \
-               -f 'properties[][value]=adopted' >/dev/null 2>&1; then
+
+          # A JSON body, not `-f properties[][key]=`. GitHub wants an array of
+          # objects here and gh's form encoding cannot express one.
+          cat > "$RUNNER_TEMP/prop.json" <<'PROP'
+          {"properties":[{"property_name":"datum-standard","value":"adopted"}]}
+          PROP
+
+          # The error is PRINTED. The first version sent it to /dev/null and
+          # reported a guess -- "datum-police needs custom-properties write" --
+          # which stayed on screen after that permission had been granted, and
+          # sent everyone looking at the thing that was already fixed. A warning
+          # that names its own guess as the cause is worse than one that says
+          # nothing.
+          if out=$(gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
+                     --input "$RUNNER_TEMP/prop.json" 2>&1); then
             echo "::notice::Set datum-standard=adopted on $NAME. The organisation ruleset applies from now."
           else
-            echo "::warning::Could not set datum-standard on $NAME — datum-police needs custom-properties write. The pull request is unaffected, and the weekly audit will set it once that permission exists."
+            echo "::warning::Could not set datum-standard on $NAME. The pull request is unaffected; the weekly audit will retry."
+            echo "$out" | head -20
+          fi
+
+          # And verify, rather than trusting a zero exit. This endpoint is a
+          # PATCH that can accept a body and change nothing.
+          if [ "$(gh api "repos/$OWNER/$NAME/properties/values" \
+                    -q '[.[]|select(.property_name=="datum-standard")]|length')" = "0" ]; then
+            echo "::warning::datum-standard is still unset on $NAME after the write. Read the output above."
           fi
 
       - name: Say what happened

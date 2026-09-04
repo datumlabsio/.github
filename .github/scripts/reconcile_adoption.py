@@ -76,12 +76,27 @@ def current_value(repo: str) -> str | None:
 
 
 def set_adopted(repo: str) -> bool:
+    """A JSON body, not `-f properties[][key]=`.
+
+    GitHub wants an array of objects here and gh's form encoding cannot express
+    one. And the result is VERIFIED rather than inferred from a zero exit: this
+    is a PATCH that can accept a body and change nothing.
+    """
+    import json as _json
+    import tempfile
+
+    body = {"properties": [{"property_name": PROPERTY, "value": ADOPTED}]}
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+        _json.dump(body, fh)
+        path = fh.name
     r = subprocess.run(
         ["gh", "api", "-X", "PATCH", f"repos/{ORG}/{repo}/properties/values",
-         "-f", f"properties[][property_name]={PROPERTY}",
-         "-f", f"properties[][value]={ADOPTED}"],
+         "--input", path],
         capture_output=True, text=True)
-    return r.returncode == 0
+    if r.returncode != 0:
+        print(f"::warning::{repo}: {r.stderr.strip()[:300]}")
+        return False
+    return current_value(repo) == ADOPTED
 
 
 def main() -> int:

@@ -32,7 +32,8 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 # --- it must not be able to clear or downgrade -----------------------------
 # The value is written through a constant, so assert on both: every write uses
 # the constant, and the constant is `adopted`.
-writes = set(re.findall(r'properties\[\]\[value\]=\{?(\w+)\}?', SRC))
+# The body is JSON now, not form fields: {"property_name": PROPERTY, "value": ADOPTED}
+writes = set(re.findall(r'"value":\s*(\w+)', SRC))
 const = re.search(r'^ADOPTED\s*=\s*"([^"]+)"', SRC, re.M)
 check("every write goes through the ADOPTED constant",
       writes == {"ADOPTED"}, f"writes {writes}")
