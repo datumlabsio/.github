@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   renovate:
-    uses: datumlabsio/actions/.github/workflows/renovate.yml@v1.1.2
+    uses: datumlabsio/actions/.github/workflows/renovate.yml@v1.3.0
     with:
       dry-run: ${{ inputs.dry-run || false }}
       log-level: ${{ inputs.log-level || 'info' }}

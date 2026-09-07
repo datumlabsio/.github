@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   audit:
-    uses: datumlabsio/actions/.github/workflows/conformance-audit.yml@v1.1.2
+    uses: datumlabsio/actions/.github/workflows/conformance-audit.yml@v1.3.0
     permissions:
       contents: read
       issues: write

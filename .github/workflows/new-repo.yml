@@ -28,7 +28,7 @@ jobs:
   # because a Slack webhook is missing.
   announce:
     if: github.event.label.name == 'repo-request'
-    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.1.2
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.3.0
     with:
       summary: "${{ github.event.issue.user.login }} requested a repository"
       detail: >-

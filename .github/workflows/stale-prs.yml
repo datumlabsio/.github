@@ -138,7 +138,7 @@ jobs:
   tell-somebody:
     needs: find
     if: needs.find.outputs.found == 'true'
-    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.1.2
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.3.0
     with:
       summary: ${{ needs.find.outputs.summary }}
       detail: ${{ needs.find.outputs.detail }}
