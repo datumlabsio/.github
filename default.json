@@ -36,8 +36,11 @@
 
   "packageRules": [
     {
-      "description": "The org's own reusable workflows. This is the path a gate fix travels, so it gets its own pull request, is never grouped with anything else, and is never held to the weekly window. pinDigests is off because DES §4 requires an exact VERSION tag here, not a SHA — a SHA cannot be read as 'which release am I on'.",
-      "matchManagers": ["github-actions"],
+      "description": [
+        "The org's own reusable workflows. This is the path a gate fix travels, so it gets its own pull request, is never grouped with anything else, and is never held to the weekly window. pinDigests is off because DES §4 requires an exact VERSION tag here, not a SHA — a SHA cannot be read as 'which release am I on'.",
+        "custom.regex is in matchManagers because scaffolds/copier.yml pins actions_version through the customManager below, and that manager is custom.regex rather than github-actions. Without it this rule did not apply to that pin: no priority, no 'at any time', so the one value deciding which CI version every new repo is born on sat in the weekly window and was NOT in the pull requests that bumped everything else. It stayed on v0.27.1 while the fleet moved to v1.2.x. matchPackageNames still narrows this to datumlabsio/**, so the tool-version pins that share the regex manager are unaffected."
+      ],
+      "matchManagers": ["github-actions", "custom.regex"],
       "matchPackageNames": ["datumlabsio/**"],
       "groupName": "datumlabsio actions",
       "schedule": ["at any time"],
