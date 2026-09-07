@@ -30,6 +30,10 @@ on:
         description: "Override the audited list, space-separated owner/repo."
         type: string
         default: ""
+      baseline-only-repos:
+        description: "Override the baseline-only list, space-separated owner/repo."
+        type: string
+        default: ""
       dry-run:
         description: "Leave true to report without filing."
         type: boolean
@@ -44,7 +48,7 @@ concurrency:
 
 jobs:
   audit:
-    uses: datumlabsio/actions/.github/workflows/conformance-audit.yml@v1.1.2
+    uses: datumlabsio/actions/.github/workflows/conformance-audit.yml@v1.3.0
     permissions:
       contents: read
       issues: write
@@ -58,11 +62,25 @@ jobs:
       # notice drift could not see the only other repo that had adopted.
       repos: ${{ inputs.repos || 'datumlabsio/polaris datumlabsio/dl-assessment-platform' }}
 
-      # NOT YET: `baseline-only-repos: EmberAssetManagement/ecp-frontend`.
-      # The input lands in datumlabsio/actions#85; passing an input this pinned
-      # version does not declare is a hard error, not a warning, so it waits for
-      # the release and the pin bump that follows it. The register of external
-      # adopters is in actions/docs/adopting-a-repo-we-do-not-own.md meanwhile.
+      # EMPTY BY DEFAULT, and that is a decision rather than an omission.
+      #
+      # This job mints an App installation token scoped to `owner` = this
+      # organisation. It cannot read a PRIVATE repository in someone else's org,
+      # and every external adopter so far is one. Auditing them needs a
+      # credential in their organisation, and the options were: install an app
+      # holding `workflows: write` across client orgs, add a second read-only
+      # app, or do not audit them. We chose not to audit them -- a standing
+      # grant in a client's organisation is a permanent risk carried for a
+      # weekly report.
+      #
+      # So an external adopter is tracked by the register in
+      # actions/docs/adopting-a-repo-we-do-not-own.md, by Dependabot keeping
+      # their pin current without us, and by their own team. Nothing here
+      # notices if the file is deleted. That is understood, not overlooked.
+      #
+      # The input still works: pass it by hand for a PUBLIC external repo, which
+      # needs no credential, or when an assessment is being run deliberately.
+      baseline-only-repos: ${{ inputs.baseline-only-repos }}
       dry-run: ${{ inputs.dry-run == null && true || inputs.dry-run }}
     secrets:
       app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
