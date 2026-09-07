@@ -52,7 +52,17 @@ jobs:
       # Explicit rather than autodiscovered. A repo joins this list when it
       # adopts the standard, which is a decision somebody makes rather than
       # something a workflow infers.
-      repos: ${{ inputs.repos || 'datumlabsio/polaris' }}
+      #
+      # `dl-assessment-platform` carries `datum-standard: adopted` and had been
+      # missing from this list since it adopted -- so the audit that exists to
+      # notice drift could not see the only other repo that had adopted.
+      repos: ${{ inputs.repos || 'datumlabsio/polaris datumlabsio/dl-assessment-platform' }}
+
+      # NOT YET: `baseline-only-repos: EmberAssetManagement/ecp-frontend`.
+      # The input lands in datumlabsio/actions#85; passing an input this pinned
+      # version does not declare is a hard error, not a warning, so it waits for
+      # the release and the pin bump that follows it. The register of external
+      # adopters is in actions/docs/adopting-a-repo-we-do-not-own.md meanwhile.
       dry-run: ${{ inputs.dry-run == null && true || inputs.dry-run }}
     secrets:
       app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
