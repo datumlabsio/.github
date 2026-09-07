@@ -62,17 +62,25 @@ jobs:
       # notice drift could not see the only other repo that had adopted.
       repos: ${{ inputs.repos || 'datumlabsio/polaris datumlabsio/dl-assessment-platform' }}
 
-      # Audited on the four things they adopted -- called, pinned, current, and
-      # HAS ACTUALLY RUN -- not the seven §12 checks. They merged one file and
-      # were told it changes nothing about how their repository is built, so the
-      # §12 items are not failures there; they are things that team never agreed
-      # to, and this job files issues.
+      # EMPTY BY DEFAULT, and that is a decision rather than an omission.
       #
-      # The register of who belongs on this list, and what was promised to each,
-      # is actions/docs/adopting-a-repo-we-do-not-own.md. A repository joins
-      # BOTH in the same pull request or the register is decorative.
-      baseline-only-repos: >-
-        ${{ inputs.baseline-only-repos || 'EmberAssetManagement/ecp-frontend' }}
+      # This job mints an App installation token scoped to `owner` = this
+      # organisation. It cannot read a PRIVATE repository in someone else's org,
+      # and every external adopter so far is one. Auditing them needs a
+      # credential in their organisation, and the options were: install an app
+      # holding `workflows: write` across client orgs, add a second read-only
+      # app, or do not audit them. We chose not to audit them -- a standing
+      # grant in a client's organisation is a permanent risk carried for a
+      # weekly report.
+      #
+      # So an external adopter is tracked by the register in
+      # actions/docs/adopting-a-repo-we-do-not-own.md, by Dependabot keeping
+      # their pin current without us, and by their own team. Nothing here
+      # notices if the file is deleted. That is understood, not overlooked.
+      #
+      # The input still works: pass it by hand for a PUBLIC external repo, which
+      # needs no credential, or when an assessment is being run deliberately.
+      baseline-only-repos: ${{ inputs.baseline-only-repos }}
       dry-run: ${{ inputs.dry-run == null && true || inputs.dry-run }}
     secrets:
       app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
