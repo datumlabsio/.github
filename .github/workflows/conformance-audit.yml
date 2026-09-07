@@ -30,6 +30,10 @@ on:
         description: "Override the audited list, space-separated owner/repo."
         type: string
         default: ""
+      baseline-only-repos:
+        description: "Override the baseline-only list, space-separated owner/repo."
+        type: string
+        default: ""
       dry-run:
         description: "Leave true to report without filing."
         type: boolean
@@ -44,7 +48,7 @@ concurrency:
 
 jobs:
   audit:
-    uses: datumlabsio/actions/.github/workflows/conformance-audit.yml@v1.1.2
+    uses: datumlabsio/actions/.github/workflows/conformance-audit.yml@v1.3.0
     permissions:
       contents: read
       issues: write
@@ -58,11 +62,17 @@ jobs:
       # notice drift could not see the only other repo that had adopted.
       repos: ${{ inputs.repos || 'datumlabsio/polaris datumlabsio/dl-assessment-platform' }}
 
-      # NOT YET: `baseline-only-repos: EmberAssetManagement/ecp-frontend`.
-      # The input lands in datumlabsio/actions#85; passing an input this pinned
-      # version does not declare is a hard error, not a warning, so it waits for
-      # the release and the pin bump that follows it. The register of external
-      # adopters is in actions/docs/adopting-a-repo-we-do-not-own.md meanwhile.
+      # Audited on the four things they adopted -- called, pinned, current, and
+      # HAS ACTUALLY RUN -- not the seven §12 checks. They merged one file and
+      # were told it changes nothing about how their repository is built, so the
+      # §12 items are not failures there; they are things that team never agreed
+      # to, and this job files issues.
+      #
+      # The register of who belongs on this list, and what was promised to each,
+      # is actions/docs/adopting-a-repo-we-do-not-own.md. A repository joins
+      # BOTH in the same pull request or the register is decorative.
+      baseline-only-repos: >-
+        ${{ inputs.baseline-only-repos || 'EmberAssetManagement/ecp-frontend' }}
       dry-run: ${{ inputs.dry-run == null && true || inputs.dry-run }}
     secrets:
       app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
