@@ -26,4 +26,4 @@ permissions:
 
 jobs:
   security:
-    uses: datumlabsio/actions/.github/workflows/security-baseline.yml@v0.27.0
+    uses: datumlabsio/actions/.github/workflows/security-baseline.yml@v1.1.2

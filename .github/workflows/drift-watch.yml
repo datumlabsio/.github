@@ -158,7 +158,7 @@ jobs:
   tell-somebody:
     needs: drift
     if: needs.drift.outputs.found == 'true'
-    uses: datumlabsio/actions/.github/workflows/notify.yml@v0.24.0
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.1.2
     with:
       summary: ${{ needs.drift.outputs.summary }}
       detail: ${{ needs.drift.outputs.detail }}
