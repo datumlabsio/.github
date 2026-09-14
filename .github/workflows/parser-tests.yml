@@ -55,6 +55,12 @@ jobs:
       - name: Adoption warnings fire only on real conditions
         run: python3 .github/scripts/test_adoption_warnings.py
 
+      # A discarded error reported a working team as broken, and blocked the
+      # first adoption that ever reached the check. Second time a 2>/dev/null
+      # sent somebody to fix the wrong thing.
+      - name: Preflight tells 'cannot read' apart from 'no access'
+        run: python3 .github/scripts/test_preflight_team_check.py
+
       # copier shells out to its own git clone and the scaffold is PRIVATE.
       # actions/CLAUDE.md records this as rediscovered four times before it was
       # written down; writing it down did not stop the fifth, which failed in

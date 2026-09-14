@@ -21,6 +21,10 @@ fail=0
 
 bad() { echo "  ✗ $1"; fail=1; }
 ok()  { echo "  ✓ $1"; }
+# A check that could not RUN is not a check that failed. Reporting it as a
+# failure sends someone to fix a thing that was never broken -- which is what
+# happened here once already, on the property's edit permission.
+unk() { echo "  ? $1"; }
 
 echo "Preflight for $ORG/$NAME"
 echo
@@ -46,15 +50,33 @@ fi
 # --- CODEOWNERS will not be inert -----------------------------------------
 # GitHub silently ignores a CODEOWNERS entry naming a team without write, so
 # reviews are never requested and nothing anywhere looks wrong.
-PERM=$(gh api "repos/$ORG/$NAME/teams" -q ".[]|select(.slug==\"$TEAM\")|.permission" 2>/dev/null)
-case "$PERM" in
-  push|maintain|admin) ok "team '$TEAM' has $PERM -- CODEOWNERS will be honoured" ;;
-  "") bad "team '$TEAM' has NO access to $NAME, so its CODEOWNERS entry would be
+#
+# Reading the team list needs a permission datum-police may not hold. That
+# failure used to be discarded with 2>/dev/null and reported as "the team has
+# NO access" -- indistinguishable from the real thing, and the printed fix was
+# to grant a permission the team already had. The error is kept and shown.
+TEAM_ERR=$(mktemp)
+PERM=$(gh api "repos/$ORG/$NAME/teams" -q ".[]|select(.slug==\"$TEAM\")|.permission" 2>"$TEAM_ERR")
+TEAM_RC=$?
+
+if [ "$TEAM_RC" -ne 0 ]; then
+  unk "cannot read which teams have access to $NAME, so whether CODEOWNERS will
+      be honoured is UNKNOWN -- not known to be wrong. Listing a repository's
+      teams needs a permission this token does not have; grant datum-police
+      Administration (read) to make this a real check. GitHub said:
+      $(tr -d '\r' < "$TEAM_ERR" | head -2 | tr '\n' ' ')
+      Verify by hand: gh api repos/$ORG/$NAME/teams -q '.[]|\"\\(.slug) \\(.permission)\"'"
+else
+  case "$PERM" in
+    push|maintain|admin) ok "team '$TEAM' has $PERM -- CODEOWNERS will be honoured" ;;
+    "") bad "team '$TEAM' has NO access to $NAME, so its CODEOWNERS entry would be
       silently ignored -- no error, no reviews requested, nothing looks wrong.
       gh api -X PUT orgs/$ORG/teams/$TEAM/repos/$ORG/$NAME -f permission=push" ;;
-  *)  bad "team '$TEAM' has '$PERM', which is not write. CODEOWNERS would be inert.
+    *)  bad "team '$TEAM' has '$PERM', which is not write. CODEOWNERS would be inert.
       gh api -X PUT orgs/$ORG/teams/$TEAM/repos/$ORG/$NAME -f permission=push" ;;
-esac
+  esac
+fi
+rm -f "$TEAM_ERR"
 
 # --- the property exists and this token may write it -----------------------
 EDITABLE=$(gh api "orgs/$ORG/properties/schema/$PROPERTY" -q .values_editable_by 2>/dev/null)
