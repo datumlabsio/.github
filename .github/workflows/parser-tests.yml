@@ -61,6 +61,12 @@ jobs:
       - name: Preflight tells 'cannot read' apart from 'no access'
         run: python3 .github/scripts/test_preflight_team_check.py
 
+      # The pin deciding which CI version every newly adopted repo is born on
+      # arrived as `chore`, which cuts no release -- so it sat on main while
+      # every adoption landed the version before it.
+      - name: The copier pin is typed so a bump actually ships
+        run: python3 .github/scripts/test_renovate_release_gap.py
+
       # copier shells out to its own git clone and the scaffold is PRIVATE.
       # actions/CLAUDE.md records this as rediscovered four times before it was
       # written down; writing it down did not stop the fifth, which failed in
