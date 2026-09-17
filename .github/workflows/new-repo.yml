@@ -302,12 +302,31 @@ jobs:
           NAME: ${{ steps.request.outputs.repo_name }}
         run: |
           set -euo pipefail
-          if gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
-               -f 'properties[][property_name]=datum-standard' \
-               -f 'properties[][value]=adopted' >/dev/null 2>&1; then
+
+          # `>/dev/null 2>&1` used to be here, and it cost an evening. The step
+          # failed on a repository created from the form, the warning guessed at
+          # two causes that were both wrong -- the property IS in the schema and
+          # the App DOES hold repository_custom_properties: write -- and the
+          # actual API message was thrown away. A warning that guesses is worse
+          # than one that quotes.
+          if out=$(gh api -X PATCH "repos/$OWNER/$NAME/properties/values" \
+                     -f 'properties[][property_name]=datum-standard' \
+                     -f 'properties[][value]=adopted' 2>&1); then
             echo "::notice::Set datum-standard=adopted on $NAME."
           else
-            echo "::warning::Could not set datum-standard on $NAME. Define the property in the organisation schema, or grant the App custom-properties write. The repository itself is unaffected."
+            echo "::warning::Could not set datum-standard on $NAME. The repository itself is unaffected -- it is conformant but INVISIBLE to the organisation ruleset, so its checks do not block a merge yet."
+            echo "The API said:"
+            echo "$out" | head -20
+            echo "Most likely the App is not installed on a repository that did not exist when its installation was last configured:"
+            echo "  https://github.com/organizations/$OWNER/settings/installations"
+          fi
+
+          # Verify rather than trust the exit code: this endpoint is a PATCH that
+          # can accept a body and change nothing. The same check adopt-repo makes.
+          if [ "$(gh api "repos/$OWNER/$NAME/properties/values" \
+                    -q '[.[]|select(.property_name=="datum-standard")]|length' \
+                    2>/dev/null || echo 0)" = "0" ]; then
+            echo "::warning::datum-standard is still unset on $NAME after the write."
           fi
 
       - name: Tell the requester
