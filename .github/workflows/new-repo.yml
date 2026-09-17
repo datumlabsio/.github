@@ -295,6 +295,7 @@ jobs:
       # It does not fail the job. A missing label must not undo a repository that
       # has already been created, pushed and protected.
       - name: Record that it was born conformant
+        id: property
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.scribe.outputs.token }}
@@ -327,6 +328,9 @@ jobs:
                     -q '[.[]|select(.property_name=="datum-standard")]|length' \
                     2>/dev/null || echo 0)" = "0" ]; then
             echo "::warning::datum-standard is still unset on $NAME after the write."
+            echo "set=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Tell the requester
@@ -339,6 +343,7 @@ jobs:
           URL: ${{ steps.create.outputs.url }}
           CREATED: ${{ steps.create.outputs.created }}
           TEAM_ACCESS: ${{ steps.create.outputs.team_access }}
+          PROPERTY_SET: ${{ steps.property.outputs.set }}
           ANSWERS: ${{ steps.request.outputs.answers }}
           OWNER: ${{ github.repository_owner }}
           NAME: ${{ steps.request.outputs.repo_name }}
@@ -378,6 +383,15 @@ jobs:
             {
               printf '%s\n\n' "**$NAME is ready:** $URL"
               answers_block
+              # The one manual step left in creating a repository, said to the
+              # person who asked for it rather than buried in a run log they
+              # will never open. Without the property the repository is
+              # conformant and INVISIBLE: it gets no required checks, so a red
+              # build does not block a merge, and nothing says so anywhere.
+              if [ "${PROPERTY_SET:-}" != "true" ]; then
+                printf '%s\n\n' "**Action needed: this repository is not enforced yet.** \`datum-standard\` could not be set, which almost always means the \`datum-police\` App is not installed on a repository that did not exist when its installation was last configured. Until it is set, failing checks do **not** block a merge here."
+                printf '%s\n\n' "Two steps, both one-off: add **$NAME** at <https://github.com/organizations/$OWNER/settings/installations>, then set the property with \`gh api -X PATCH repos/$OWNER/$NAME/properties/values -f 'properties[][property_name]=datum-standard' -f 'properties[][value]=adopted'\` — or just re-run this workflow."
+              fi
               if [ "${TEAM_ACCESS:-}" != "true" ]; then
                 team=$(printf '%s' "${ANSWERS:-}" | jq -r '.owning_team // "the owning team"')
                 printf '%s\n\n' "**Action needed: $team does not have access to this repository yet.** Its CODEOWNERS entry is ignored by GitHub until an owner grants the team write access, which means reviews are currently required from nobody. Ask an organisation owner to add it under *Settings to Collaborators and teams*."
