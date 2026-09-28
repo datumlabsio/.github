@@ -17,6 +17,7 @@ Run: python3 .github/scripts/test_runner_watch.py
 
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -131,6 +132,42 @@ check(re.search(r"sleep 60\s*\n\s*if probe", real) is not None,
 check(real.count("exit 1") >= 1 and "Refusing to decide" in real,
       "a failed read no longer stops the job before it decides")
 check("flip-to=$offline" in real, "the decision output changed name")
+
+
+# --- the flags actually exist ---------------------------------------------
+# `gh variable set --value` shipped. It is not a flag; the flag is --body. The
+# shape tests above all passed, and the run was green, because the write step
+# skips whenever nothing needs changing — so the one command that matters had
+# never executed. Ask the real binary instead of reading the line again.
+#
+# Deliberately not skippable. "gh is not installed, assume it is fine" is the
+# same shrug that let --value through.
+if shutil.which("gh") is None:
+    failures.append("gh is not installed, so the flags in this workflow are "
+                    "unverified — this check does not get to pass by default")
+else:
+    runs = "\n".join(s["run"] for s in WATCH["steps"] if "run" in s)
+    runs = runs.replace("\\\n", " ")          # join shell continuations
+    seen = set()
+    for m in re.finditer(r"\bgh((?:\s+[a-z][a-z0-9-]*)+)([^\n|)&;]*)", runs):
+        sub = m.group(1).split()
+        flags = set(re.findall(r"--[a-z][a-z0-9-]*", m.group(2)))
+        # Trailing words that are arguments, not subcommands, stop the chain.
+        while sub and sub[-1] not in {"api", "set", "list", "view", "delete"}:
+            sub.pop()
+        if not sub or not flags:
+            continue
+        key = (tuple(sub), frozenset(flags))
+        if key in seen:
+            continue
+        seen.add(key)
+        help_text = subprocess.run(["gh", *sub, "--help"],
+                                   capture_output=True, text=True).stdout
+        known = set(re.findall(r"--[a-z][a-z0-9-]*", help_text))
+        for flag in sorted(flags - known):
+            failures.append(f"`gh {' '.join(sub)}` has no {flag} flag")
+    check(seen, "no gh invocation was found to check — the parser broke, and a "
+                "parser that finds nothing reports success")
 
 if failures:
     print("\n".join(f"FAIL  {f}" for f in failures))

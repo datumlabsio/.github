@@ -163,7 +163,7 @@ jobs:
           set -euo pipefail
 
           if ! err=$(gh variable set DATUM_RUNNER_OFFLINE \
-                       --org "$OWNER" --value "$OFFLINE" --visibility all 2>&1); then
+                       --org "$OWNER" --body "$OFFLINE" --visibility all 2>&1); then
             if grep -qi "403\|Resource not accessible" <<<"$err"; then
               echo "::error::datum-police cannot write organisation variables." \
                    "Grant it 'Variables: read and write' at" \
