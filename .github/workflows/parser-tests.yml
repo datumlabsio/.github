@@ -88,6 +88,9 @@ jobs:
       - name: A retrofit can never stop to ask about a file
         run: python3 .github/scripts/test_adopt_never_prompts.py
 
+      - name: A timed-out API call cannot move every repo onto metered minutes
+        run: python3 .github/scripts/test_runner_watch.py
+
       # The preflight is the difference between one report and six discovered
       # failures. It has to be syntactically valid and it has to be wired in.
       - name: The preflight runs before anything is done
