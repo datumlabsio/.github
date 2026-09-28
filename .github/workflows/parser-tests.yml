@@ -91,6 +91,9 @@ jobs:
       - name: A timed-out API call cannot move every repo onto metered minutes
         run: python3 .github/scripts/test_runner_watch.py
 
+      - name: A runner group opened to public repositories gets noticed
+        run: python3 .github/scripts/test_drift_watch_runner_groups.py
+
       # The preflight is the difference between one report and six discovered
       # failures. It has to be syntactically valid and it has to be wired in.
       - name: The preflight runs before anything is done
