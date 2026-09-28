@@ -1,0 +1,203 @@
+name: runner-watch
+
+# The other half of the self-hosted runner failover (B-97). `actions` gives every
+# reusable workflow a kill switch:
+#
+#   runs-on: ${{ vars.DATUM_RUNNER_OFFLINE == 'true' && 'ubuntu-latest' || inputs.runner-label }}
+#
+# This is what keeps that variable honest. It asks GitHub whether a runner
+# carrying the `datum` label is actually there, and sets the variable to match.
+#
+# WHY A VARIABLE AND NOT A SECRET, OR A FILE, OR A DISPATCH TO EVERY REPO.
+# A workflow reads an organisation variable with no credential, no extra job and
+# no token minted anywhere — so recovery is automatic and holds no state that can
+# get stuck. The next run after this clears it picks the runner back up. Nothing
+# has to remember that a failover happened, which is the failure mode of every
+# design that writes a file or opens a pull request.
+#
+# TWO LIMITS, BOTH REAL, BOTH IN THE RUNBOOK.
+#   * Detection lags. GitHub runs scheduled workflows late under load; ten to
+#     thirty minutes is normal for a */10 cron. Jobs queue during the gap — they
+#     do not fail. GitHub cancels a job that has queued for 24 hours.
+#   * A job already queued is not rescued. The variable is read when a run
+#     STARTS. Cancel and re-run anything already waiting.
+#
+# The lag is the one worth fixing, and the fix is already wired: the
+# `runner-heartbeat-lost` repository_dispatch below runs this same check
+# immediately. The VM pings an UptimeRobot heartbeat monitor every minute, and
+# UptimeRobot fires the dispatch when a ping is missed. Outbound only, so it
+# respects the runner's "no inbound ports" rule, and no Slack credential goes
+# anywhere near the VM. Waiting on the UptimeRobot account; the cron works
+# without it.
+#
+# Note the dispatch does not CARRY the verdict. It only asks this job to look
+# now. Anything that can reach a public dispatch endpoint could otherwise put
+# every repo onto GitHub-hosted runners by asserting the runner is dead.
+
+on:
+  schedule:
+    # Every ten minutes. Not */5: GitHub drops high-frequency schedules under
+    # load, so a tighter cron buys less than it looks like it does, and the
+    # heartbeat dispatch is the real answer to lag.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [runner-heartbeat-lost]
+
+permissions: {}
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    outputs:
+      went-offline: ${{ steps.flip.outputs.went-offline }}
+      detail: ${{ steps.flip.outputs.detail }}
+    steps:
+      # Two tokens, not one. The step below reads and parses API output and
+      # runs the whole decision; it gets a token that can do nothing but list
+      # runners. The broad token is minted later, only if something is actually
+      # going to be written, and only a fixed one-line command sees it.
+      #
+      # datum-runner also holds `organization_self_hosted_runners`, and its
+      # private key sits on the VM. That key must never be able to write an
+      # organisation variable — a compromised runner could otherwise point
+      # every repo's CI at itself. This runs under datum-police, whose key
+      # never leaves GitHub.
+      - name: Mint a read-only token for the probe
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-organization-self-hosted-runners: read
+
+      - name: Is a runner carrying the label actually there
+        id: check
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          LABEL: datum
+          # Read through the same context every other workflow reads it through,
+          # rather than through the API. If this disagrees with what CI sees,
+          # it is wrong for the same reason CI would be.
+          CURRENT: ${{ vars.DATUM_RUNNER_OFFLINE }}
+        run: |
+          set -euo pipefail
+
+          # Returns 0 if at least one online runner carries the label.
+          probe() {
+            local body
+            if ! body=$(gh api "/orgs/$OWNER/actions/runners" --paginate 2>&1); then
+              if grep -qi "403\|Resource not accessible" <<<"$body"; then
+                echo "::error::datum-police cannot list organisation runners." \
+                     "Grant it 'Self-hosted runners: read' and" \
+                     "'Variables: read and write' at" \
+                     "https://github.com/organizations/$OWNER/settings/apps/datum-police/permissions" \
+                     "— this job will not guess at runner state."
+              else
+                echo "::error::Could not read runner state: $body"
+              fi
+              # Refusing to decide is the right answer. Flipping the variable on
+              # a failed read would put every repo onto metered minutes because
+              # an API call timed out.
+              exit 1
+            fi
+            jq -e --arg l "$LABEL" \
+              '[.runners[] | select(.status=="online") | select([.labels[].name] | index($l))] | length > 0' \
+              <<<"$body" >/dev/null
+          }
+
+          if probe; then
+            offline=false
+          else
+            # One missed probe is a runner restart, a service reload, or a
+            # network blip. Two, a minute apart, is an outage. Being slow to
+            # declare an outage costs a queued job; being quick costs a Slack
+            # message nobody trusts and a bill on metered minutes.
+            echo "No online runner with label '$LABEL'. Looking again in 60s."
+            sleep 60
+            if probe; then
+              echo "::notice::Recovered within the grace period. Nothing to do."
+              offline=false
+            else
+              offline=true
+            fi
+          fi
+
+          # An unset variable means the runner is up, so absent and "false" are
+          # the same state and must not be treated as a flip.
+          current="${CURRENT:-false}"
+          echo "observed offline=$offline, variable says $current"
+
+          if [ "$offline" = "$current" ]; then
+            echo "::notice::No change."
+            exit 0
+          fi
+
+          echo "flip-to=$offline" >> "$GITHUB_OUTPUT"
+
+      # `actions/create-github-app-token` has no input for organisation
+      # variables — it has one for every other organisation permission, but not
+      # that one — so this token cannot be narrowed and carries everything
+      # datum-police holds. Keeping it in its own step, behind the `if`, is the
+      # part that is available: it exists only on the runs that write, and the
+      # only thing that sees it is the fixed command below.
+      - name: Mint a token that can write the variable
+        id: write-token
+        if: steps.check.outputs.flip-to != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Flip it
+        id: flip
+        if: steps.check.outputs.flip-to != ''
+        env:
+          GH_TOKEN: ${{ steps.write-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          OFFLINE: ${{ steps.check.outputs.flip-to }}
+        run: |
+          set -euo pipefail
+
+          if ! err=$(gh variable set DATUM_RUNNER_OFFLINE \
+                       --org "$OWNER" --value "$OFFLINE" --visibility all 2>&1); then
+            if grep -qi "403\|Resource not accessible" <<<"$err"; then
+              echo "::error::datum-police cannot write organisation variables." \
+                   "Grant it 'Variables: read and write' at" \
+                   "https://github.com/organizations/$OWNER/settings/apps/datum-police/permissions"
+            else
+              echo "::error::Could not set DATUM_RUNNER_OFFLINE: $err"
+            fi
+            exit 1
+          fi
+
+          if [ "$OFFLINE" = true ]; then
+            {
+              echo "went-offline=true"
+              echo "detail=CI has moved to GitHub-hosted runners on its own. Jobs already queued on the runner are still queued — cancel and re-run those. Nothing to do to switch back; it returns by itself."
+            } >> "$GITHUB_OUTPUT"
+            echo "::warning::Runner offline. Every repo moved to ubuntu-latest."
+          else
+            # Deliberately silent. notify.yml has no `info` severity, and the
+            # rule behind that is right: an alert channel that carries good news
+            # gets muted, and then it carries nothing. The flip is in this log,
+            # and the recovery needs nobody to do anything.
+            echo "::notice::Runner is back. Every repo returns to it on its next run."
+          fi
+
+  # Separate job so a missing or broken webhook cannot swallow the finding —
+  # `watch` has already said it in its own log and in the run's annotations.
+  tell-somebody:
+    needs: watch
+    if: needs.watch.outputs.went-offline == 'true'
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.5.0
+    with:
+      summary: "The self-hosted runner is offline — CI has failed over to GitHub-hosted"
+      detail: ${{ needs.watch.outputs.detail }}
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      severity: warn
+    secrets:
+      webhook: ${{ secrets.SLACK_ALERTS_WEBHOOK }}
