@@ -46,6 +46,29 @@ jobs:
     with:
       dry-run: ${{ inputs.dry-run || false }}
       log-level: ${{ inputs.log-level || 'info' }}
+
+      # Named, not `datumlabsio/*`.
+      #
+      # Renovate autodiscovers every repository the App is installed on, and
+      # only acts on the ones that already carry a config -- which was a good
+      # enough guard while the App was installed on a handful. It stops being
+      # one the moment the installation covers the whole organisation.
+      #
+      # `datum-platform` is the case that made this concrete: it carries a
+      # renovate.json, has never received a bot pull request, and runs macOS
+      # jobs at roughly ten times the Linux rate. Widening the installation
+      # would have opened a first-run burst there and put it on the bill,
+      # arriving as a surprise rather than a decision.
+      #
+      # THE COST OF THIS LIST: a repository that adopts and is not added here
+      # silently stops receiving dependency bumps. Add it in the same pull
+      # request that adopts it.
+      #
+      # One line, no spaces after the commas: Renovate splits this on `,` and
+      # does not trim, so a folded block scalar would hand it ` datumlabsio/x`
+      # and match nothing -- silently, because a filter that matches nothing
+      # looks exactly like a week with no updates due.
+      autodiscover-filter: "datumlabsio/actions,datumlabsio/scaffolds,datumlabsio/.github,datumlabsio/polaris,datumlabsio/dl-assessment-platform,datumlabsio/ember"
     secrets:
       # datum-police, a GitHub App — DES §7 and docs/bot-identities.md: an
       # automation gets its own app, not a person's token. The workflow mints a
