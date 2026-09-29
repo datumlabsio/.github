@@ -1,18 +1,55 @@
 {
   "_comment": [
     "What the drift watch expects to be true. A repository is listed here because",
-    "somebody decided its shape deliberately — not because it happened to be set",
+    "somebody decided its shape deliberately \u2014 not because it happened to be set",
     "that way. Adding a repository is a decision; the file is the record of it.",
     "",
     "`actions` and `.github` are public ON PURPOSE: `.github` serves org defaults,",
     "and `actions` holds reusable workflows other orgs' repos call. Everything else",
-    "is private. So this cannot be a blanket 'must be private' rule."
+    "is private. So this cannot be a blanket 'must be private' rule.",
+    "",
+    "`runner_groups` is the same idea for self-hosted runners. A runner group is",
+    "the only thing standing between a fork's pull request on a public repository",
+    "and code running on our own hardware, on the office LAN. It is one toggle,",
+    "it lives in a settings page nobody visits, and flipping it leaves no trace.",
+    "So: `allows_public_repositories` false, and `datum-private` scoped to the",
+    "repositories listed here and no others. A group that appears is drift too."
   ],
   "repos": [
-    { "name": "actions",         "visibility": "public"  },
-    { "name": "scaffolds",       "visibility": "private" },
-    { "name": ".github",         "visibility": "public"  },
-    { "name": "datum-standards", "visibility": "private" },
-    { "name": "polaris",         "visibility": "private" }
+    {
+      "name": "actions",
+      "visibility": "public"
+    },
+    {
+      "name": "scaffolds",
+      "visibility": "private"
+    },
+    {
+      "name": ".github",
+      "visibility": "public"
+    },
+    {
+      "name": "datum-standards",
+      "visibility": "private"
+    },
+    {
+      "name": "polaris",
+      "visibility": "private"
+    }
+  ],
+  "runner_groups": [
+    {
+      "name": "Default",
+      "allows_public_repositories": false,
+      "visibility": "all"
+    },
+    {
+      "name": "datum-private",
+      "allows_public_repositories": false,
+      "visibility": "selected",
+      "repos": [
+        "polaris"
+      ]
+    }
   ]
 }

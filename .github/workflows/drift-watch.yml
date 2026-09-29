@@ -77,7 +77,9 @@ jobs:
           import json, os, subprocess, sys
 
           owner = os.environ["OWNER"]
-          watched = json.load(open(os.environ["WATCHED"]))["repos"]
+          decided = json.load(open(os.environ["WATCHED"]))
+          watched = decided["repos"]
+          groups = decided["runner_groups"]
 
           def api(path):
               """Returns (ok, parsed). ok is False for any non-zero exit."""
@@ -127,8 +129,50 @@ jobs:
                   who = ", ".join(str(b.get("actor_id")) for b in rule["bypass_actors"])
                   drift.append(f"*{full}* — `protect-main` now has bypass actors: {who}.")
 
+          # RUNNER GROUPS. A group is the only thing between a fork's pull
+          # request on a public repository and code running on our own hardware,
+          # on the office LAN. It is one toggle, in a settings page nobody
+          # visits, and flipping it leaves no trace anywhere else — which is the
+          # definition of what belongs in this job rather than in a gate.
+          ok, live = api("orgs/" + owner + "/actions/runner-groups")
+          if not ok:
+              blind.append("runner groups")
+              live = {"runner_groups": []}
+
+          by_name = {g["name"]: g for g in live["runner_groups"]}
+          for want in groups:
+              name = want["name"]
+              got = by_name.pop(name, None)
+              if got is None:
+                  drift.append(f"Runner group *{name}* is gone.")
+                  continue
+              if got["allows_public_repositories"]:
+                  drift.append(f"Runner group *{name}* now allows PUBLIC "
+                               f"repositories. A fork's pull request can run on "
+                               f"our hardware.")
+              if got["visibility"] != want["visibility"]:
+                  drift.append(f"Runner group *{name}* is visible to "
+                               f"{got['visibility']}, was decided "
+                               f"{want['visibility']}.")
+              if "repos" not in want:
+                  continue
+              ok, sel = api(f"orgs/{owner}/actions/runner-groups/{got['id']}/repositories")
+              if not ok:
+                  blind.append(f"runner group {name} repositories")
+                  continue
+              have = sorted(r["name"] for r in sel["repositories"])
+              if have != sorted(want["repos"]):
+                  drift.append(f"Runner group *{name}* grants {have}, was "
+                               f"decided {sorted(want['repos'])}.")
+
+          # A group nobody decided on is drift in its own right: it is how a
+          # second, unwatched path onto the hardware appears.
+          for name in by_name:
+              drift.append(f"Runner group *{name}* exists and is not in "
+                           f"watched-repos.json. Nobody decided it.")
+
           checked = len(watched)
-          print(f"checked {checked} repositories")
+          print(f"checked {checked} repositories and {len(groups)} runner groups")
 
           if blind:
               print(f"::error::Could not read rulesets for: {', '.join(blind)}. "
@@ -139,11 +183,11 @@ jobs:
           out = open(os.environ["GITHUB_OUTPUT"], "a")
           if not drift:
               out.write("found=false\n")
-              print(f"::notice::All {checked} repositories match what was decided.")
+              print(f"::notice::All {checked} repositories and {len(groups)} runner groups match what was decided.")
               sys.exit(0)
 
           out.write("found=true\n")
-          out.write(f"summary={len(drift)} repository setting(s) changed without a gate, across {checked} watched\n")
+          out.write(f"summary={len(drift)} setting(s) changed without a gate, across {checked} repositories and {len(groups)} runner groups\n")
           out.write("detail<<DETAIL\n")
           for d in drift:
               out.write(f"• {d}\n")
