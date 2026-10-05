@@ -193,7 +193,7 @@ jobs:
   tell-somebody:
     needs: watch
     if: needs.watch.outputs.went-offline == 'true'
-    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.5.0
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.10.5
     with:
       summary: "The self-hosted runner is offline — CI has failed over to GitHub-hosted"
       detail: ${{ needs.watch.outputs.detail }}
