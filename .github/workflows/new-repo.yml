@@ -345,6 +345,9 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           FROM: ${{ github.repository }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Carries the requester's own text. Through env and printf '%s' only,
+          # never interpolated into the script.
+          NAME_WARNING: ${{ steps.request.outputs.name_warning }}
         run: |
           set -euo pipefail
           # What the scaffold was actually given. A mis-mapped answer renders a
@@ -377,6 +380,12 @@ jobs:
           if [ -n "${URL:-}" ]; then
             {
               printf '%s\n\n' "**$NAME is ready:** $URL"
+              # Said here, after the fact, rather than refused up front.
+              # Refusing enforced nothing: the one name ever refused was
+              # created by hand anyway, outside the standard entirely.
+              if [ -n "${NAME_WARNING:-}" ]; then
+                printf '%s\n\n' "**Naming:** $NAME_WARNING"
+              fi
               answers_block
               if [ "${TEAM_ACCESS:-}" != "true" ]; then
                 team=$(printf '%s' "${ANSWERS:-}" | jq -r '.owning_team // "the owning team"')
