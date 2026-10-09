@@ -98,6 +98,11 @@ def run(body: str, templates: Path | None = None, label: str | None = None) -> t
             capture_output=True,
             text=True,
         )
+        # What the workflow's later steps read. Kept in a global rather than
+        # added to the return value, which forty callers unpack as a 3-tuple.
+        global LAST_OUTPUTS
+        LAST_OUTPUTS = dict(l.split("=", 1) for l in out_file.read_text().splitlines()
+                            if "=" in l)
         args = {}
         argfile = runner_tmp / "copier-args"
         if argfile.is_file():
@@ -107,6 +112,8 @@ def run(body: str, templates: Path | None = None, label: str | None = None) -> t
                     args[k] = v
         return proc.returncode, args, proc.stdout + proc.stderr
 
+
+LAST_OUTPUTS: dict[str, str] = {}
 
 BASE = {
     "repo_name": "acme-insights",
@@ -236,11 +243,67 @@ def _():
     assert "does not match any repository-request form" in log, log
 
 
-@case("12 a bad repository name is refused")
+@case("12 a name GitHub itself would reject is still refused")
 def _():
+    # A space is not a convention question -- no such repository can exist.
+    # Only GitHub-invalid names block; the convention merely warns (12a-12e).
     rc, a, log = run(build_body(SINGLE, {**BASE, "repo_name": "Acme Insights", "archetype": "docs"}))
     assert rc != 0, f"accepted: {a}"
-    assert "not a usable repository name" in log, log
+    assert "not a repository name GitHub accepts" in log, log
+
+
+@case("12a an off-convention name is a warning, not a refusal (new-repo)")
+def _():
+    # Blocking enforced nothing: the one name ever refused was then created by
+    # hand, outside the standard. Better through the flow with a warning.
+    rc, a, log = run(build_body(SINGLE, {**BASE, "repo_name": "Acme_Insights", "archetype": "docs"}))
+    assert rc == 0, log
+    w = LAST_OUTPUTS.get("name_warning", "")
+    assert "does not follow the naming convention" in w, LAST_OUTPUTS
+    assert "`acme-insights`" in w, f"no conforming suggestion in: {w}"
+    assert "::warning::" in log, "the warning never reached the run log"
+
+
+@case("12b the real case: an existing repository with an underscore can be adopted")
+def _():
+    # #88. lucimed_analytics exists; its name is a fact. The old check could
+    # only be satisfied by renaming it, breaking every clone and integration.
+    rc, args, log = run(build_body(TEMPLATES / "adopt-repo.yml",
+                                   {"repo_name": "lucimed_analytics", "owning_team": "lucimed"}),
+                        label="adopt-request")
+    assert rc == 0, log
+    assert args["repo_name"] == "lucimed_analytics", "the name was rewritten, not just warned about"
+    assert "`lucimed-analytics`" in LAST_OUTPUTS.get("name_warning", ""), LAST_OUTPUTS
+
+
+@case("12c capitals and dots warn too, and the suggestion is a valid conforming name")
+def _():
+    for given, want in [("LibreChat", "librechat"), ("fair.inc-dbt", "fair-inc-dbt"),
+                        ("Contract-Market-Intelligence-Internal",
+                         "contract-market-intelligence-internal"),
+                        ("ECAP_Validator", "ecap-validator")]:
+        rc, args, log = run(build_body(TEMPLATES / "adopt-repo.yml",
+                                       {"repo_name": given, "owning_team": "datum-core"}),
+                            label="adopt-request")
+        assert rc == 0, f"{given}: {log}"
+        w = LAST_OUTPUTS.get("name_warning", "")
+        assert f"`{want}`" in w, f"{given}: expected suggestion {want}, got: {w}"
+
+
+@case("12d a conforming name produces no warning at all")
+def _():
+    # A warning on every request is a warning nobody reads.
+    rc, _a, log = run(build_body(SINGLE, {**BASE, "archetype": "docs"}))
+    assert rc == 0, log
+    assert LAST_OUTPUTS.get("name_warning", "") == "", LAST_OUTPUTS
+    assert "::warning::" not in log, log
+
+
+@case("12e names GitHub reserves are still refused")
+def _():
+    for bad in ["..", "repo.git", "a/b", "x" * 101]:
+        rc, a, log = run(build_body(SINGLE, {**BASE, "repo_name": bad, "archetype": "docs"}))
+        assert rc != 0, f"{bad!r} was accepted: {a}"
 
 
 # ------------------------------------------------- adopting a repo that exists

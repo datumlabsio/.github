@@ -253,9 +253,39 @@ def main() -> int:
         return 1
 
     name = a["repo_name"]
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,98}[a-z0-9]", name):
-        print(f"::error::'{name}' is not a usable repository name — lowercase, digits and hyphens only.")
+
+    # TWO DIFFERENT QUESTIONS, and only one of them may stop a request.
+    #
+    # Is it a name GitHub accepts at all? If not, the request is malformed --
+    # there is no such repository to adopt and none could be created -- so it
+    # stops here.
+    #
+    # Does it follow our convention (lowercase, digits, hyphens)? That is a
+    # WARNING. It used to be the same `exit 1`, and on the adopt form that was
+    # simply wrong: the repository already exists, its name is a fact, and the
+    # only way to satisfy the check was to rename it -- breaking every clone,
+    # remote and integration that points at it. 39 repositories in this
+    # organisation failed it and could never be adopted. On the new-repo form
+    # blocking enforced nothing either: Contract-Market-Intelligence-Internal
+    # was refused, then created by hand outside the standard.
+    #
+    # The convention is not in the DES. It lives here, so the warning says what
+    # it is rather than pointing at a rule nobody can look up.
+    if (not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", name)
+            or name in (".", "..") or name.endswith(".git")):
+        print(f"::error::'{name}' is not a repository name GitHub accepts — "
+              f"letters, digits, '.', '-' and '_' only, at most 100 characters.")
         return 1
+
+    name_warning = ""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,98}[a-z0-9]", name):
+        suggested = re.sub(r"-{2,}", "-",
+                           re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
+        name_warning = (
+            f"`{name}` does not follow the naming convention — lowercase "
+            f"letters, digits and hyphens. Conforming, it would be "
+            f"`{suggested}`. This does not block anything.")
+        print(f"::warning::{name_warning}")
 
     # `folders` only means anything for a monorepo, and an empty list would
     # render a repository with no components at all.
@@ -281,6 +311,7 @@ def main() -> int:
         f"description={a.get('repo_description', '')}\n"
         f"owning_team={a.get('owning_team', '')}\n"
         f"archetype={a.get('archetype', '')}\n"
+        f"name_warning={name_warning}\n"
         f"answers={json.dumps(a)}\n"
     )
 

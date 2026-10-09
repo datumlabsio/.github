@@ -217,6 +217,9 @@ jobs:
           BRANCH: ${{ steps.target.outputs.branch }}
           ISSUE: ${{ github.event.issue.number }}
           REQUESTER: ${{ github.event.issue.user.login }}
+          # Carries the requester's own text. Through env and printf '%s' only,
+          # never interpolated into the script.
+          NAME_WARNING: ${{ steps.request.outputs.name_warning }}
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/target"
@@ -261,6 +264,13 @@ jobs:
           # really wrong here. Boilerplate caveats get skimmed, and the one that
           # mattered gets skimmed along with them.
           python3 "$GITHUB_WORKSPACE/.github/scripts/adoption_warnings.py" . >> /tmp/body.md || true
+
+          # The repository's name, if it does not follow the convention. A
+          # warning, not a gate: the repository already exists and renaming it
+          # breaks every clone and integration pointing at it.
+          if [ -n "${NAME_WARNING:-}" ]; then
+            printf '\n## Repository name\n\n%s\n' "$NAME_WARNING" >> /tmp/body.md
+          fi
 
           url=$(gh pr create --repo "$OWNER/$NAME" --base "$(gh api "repos/$OWNER/$NAME" -q .default_branch)" \
             --head "$BRANCH" --title "feat: adopt the Datum engineering standard" --body-file /tmp/body.md)
