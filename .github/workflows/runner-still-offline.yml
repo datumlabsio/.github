@@ -1,0 +1,99 @@
+name: runner-still-offline
+
+# runner-watch posts once, when the self-hosted runners go and every
+# repository's CI moves to GitHub-hosted. On 2 November 2026 that one message
+# said the switch back "returns by itself". It did not: the runners had stopped
+# for good, nothing more was said for eight days, and every job ran on paid
+# minutes until the bill noticed.
+#
+# This is the follow-up. Once a day, for as long as DATUM_RUNNER_OFFLINE is
+# 'true', it says so again, with how long it has been. It reads the variable
+# through the vars context, the way every workflow does, so it goes quiet the
+# day the failover ends, with nothing to reset.
+#
+# WHY IT MINTS THE BROAD TOKEN. runner-watch keeps datum-police's token, which
+# cannot be narrowed to organisation variables, to the runs that write. This one
+# only reads -- but `updated_at` on the variable is the only record of when the
+# runners went. The alternative was a second variable for runner-watch to write,
+# and that goes stale the first time somebody flips the switch by hand. A
+# reminder with the wrong date is worse than one with none. So: one fixed
+# command sees it, once a day, only while the failover is on.
+#
+# WHY NOTHING HERE CAN SILENCE IT. A token that will not mint, a read that
+# fails, a date that will not parse: each makes the message say less, and none
+# stops it. An alert that a broken credential can switch off is off on the day
+# it matters.
+#
+# Runners off on purpose? Disable this workflow until they are back.
+
+on:
+  schedule:
+    # Once a day, early in the working day, and off the hour: the top of the
+    # hour is when GitHub delays scheduled runs most, and drops some.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  how-long:
+    # On the schedule, only while the failover is on. Dispatched, always, so the
+    # token and the read can be proven for real without moving every
+    # repository's CI onto paid minutes to do it. The decision below still
+    # sends nothing while the runners are up.
+    if: vars.DATUM_RUNNER_OFFLINE == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      send: ${{ steps.decide.outputs.send }}
+      summary: ${{ steps.decide.outputs.summary }}
+      detail: ${{ steps.decide.outputs.detail }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Mint a token that can read the variable
+        id: token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DATUM_POLICE_APP_ID }}
+          private-key: ${{ secrets.DATUM_POLICE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: When did it go offline
+        id: since
+        if: steps.token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if at=$(gh api "/orgs/$OWNER/actions/variables/DATUM_RUNNER_OFFLINE" --jq .updated_at 2>&1); then
+            echo "at=$at" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Could not read when the failover was switched on, so the reminder will not say: $at"
+          fi
+
+      - name: Is it worth saying again
+        id: decide
+        env:
+          OFFLINE: ${{ vars.DATUM_RUNNER_OFFLINE }}
+          SINCE: ${{ steps.since.outputs.at }}
+        run: python3 .github/scripts/runner_still_offline.py
+
+  tell-somebody:
+    needs: how-long
+    if: needs.how-long.outputs.send == 'true'
+    uses: datumlabsio/actions/.github/workflows/notify.yml@v1.5.0
+    with:
+      summary: ${{ needs.how-long.outputs.summary }}
+      detail: ${{ needs.how-long.outputs.detail }}
+      url: https://github.com/datumlabsio/actions/blob/main/docs/self-hosted-runners.md#if-it-is-on-fire
+      # runner-watch's first message is a warning, because most outages end
+      # inside the hour. One that is still here twelve hours later did not.
+      severity: critical
+    secrets:
+      webhook: ${{ secrets.SLACK_ALERTS_WEBHOOK }}
