@@ -17,9 +17,10 @@ Every automation gets a row here before it gets access.
 | **`datum-police`** (GitHub App, installation `155450559`) | `renovate.yml` in this repo. Later: the conformance audit (§12) and the `main` watcher. | Push branches and open pull requests on the repos it is installed on. Read and write issues, for the Dependency Dashboard. | @humayun-1 |
 
 **`datum-police` in detail.** A GitHub App rather than a machine user, so it is
-its own identity and not a seat. Credentials are `DATUM_POLICE_APP_ID` and
+its own identity and not a seat. Credentials are `DATUM_POLICE_CLIENT_ID` and
 `DATUM_POLICE_PRIVATE_KEY`, held as **organisation** secrets scoped to selected
-repositories — org-level because the audit and the watcher will need the same
+repositories (`DATUM_POLICE_APP_ID`, the numeric ID, stays alongside until every
+caller of the shared workflows has moved to `client-id`) — org-level because the audit and the watcher will need the same
 identity from other repos, and rotating a key in one place beats three.
 
 **The token is minted per run and revoked when the job ends.** Nothing long-lived

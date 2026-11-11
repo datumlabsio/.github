@@ -134,7 +134,7 @@ code, out = preflight("push")
 check("push is ✓ and preflight passes",
       "has push" in out and "✓" in out and code == 0, f"exit {code}")
 check("...and a passing run says nothing about unknown teams",
-      "?" not in out.split("DATUM_POLICE_APP_ID")[0].split("team")[-1][:80]
+      "?" not in out.split("DATUM_POLICE_CLIENT_ID")[0].split("team")[-1][:80]
       or "cannot read" not in out, out[:200])
 
 if FAILURES:
