@@ -116,9 +116,9 @@ fi
 # token deliberately does not have. It is stated rather than checked, because a
 # missing secret makes scaffold-update report SUCCESS and do nothing -- the
 # worst of the six, and invisible until somebody triggers it and reads the log.
-echo "  ? DATUM_POLICE_APP_ID and DATUM_POLICE_PRIVATE_KEY must include $NAME in
-      their repository scope, or scaffold-update will run, report success, and
-      do nothing. Cannot be checked without org admin:
+echo "  ? DATUM_POLICE_CLIENT_ID, DATUM_POLICE_APP_ID and DATUM_POLICE_PRIVATE_KEY
+      must include $NAME in their repository scope, or scaffold-update will run,
+      report success, and do nothing. Cannot be checked without org admin:
       https://github.com/organizations/$ORG/settings/secrets/actions"
 
 echo
