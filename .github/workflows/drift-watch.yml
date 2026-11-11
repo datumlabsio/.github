@@ -55,7 +55,7 @@ jobs:
       found: ${{ steps.scan.outputs.found }}
     steps:
       - name: Check out
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.0.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Mint a token that can see the other repositories
         id: token
