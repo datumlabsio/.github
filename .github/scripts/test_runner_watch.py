@@ -84,6 +84,37 @@ check("went-offline=true" in after.split("else")[0],
 check("went-offline" not in after.split("else", 1)[1],
       "the recovery branch sets went-offline — the channel would carry good news")
 
+# --- the first message, produced rather than read ---------------------------
+# On 2 November it ended "Nothing to do to switch back; it returns by itself."
+# The runners had stopped for good, it read as an all-clear, and nothing more
+# was said for eight days. Run the real step and look at what it would send.
+with tempfile.TemporaryDirectory() as tmp:
+    bindir = pathlib.Path(tmp) / "bin"
+    bindir.mkdir()
+    (bindir / "gh").write_text("#!/bin/sh\nexit 0\n")
+    (bindir / "gh").chmod(0o755)
+    for offline in ("true", "false"):
+        out = pathlib.Path(tmp) / f"out-{offline}"
+        out.touch()
+        run = subprocess.run(
+            ["bash", "-c", flip_run],
+            env={"OFFLINE": offline, "OWNER": "acme", "GITHUB_OUTPUT": str(out),
+                 "PATH": f"{bindir}:/usr/bin:/bin"},
+            capture_output=True, text=True)
+        check(run.returncode == 0,
+              f"the flip step fails with OFFLINE={offline}: {run.stderr}")
+        written = dict(line.split("=", 1)
+                       for line in out.read_text().splitlines() if "=" in line)
+        if offline == "true":
+            said = written.get("detail", "")
+            check("self-hosted-runners.md#if-it-is-on-fire" in said,
+                  "the first message does not say where to look")
+            check("every day" in said,
+                  "the first message does not say a reminder follows")
+        else:
+            check(written == {},
+                  f"recovery wrote {written} — the channel would carry good news")
+
 # --- the decision logic, exercised rather than read -------------------------
 SCRIPT = r"""
 set -euo pipefail

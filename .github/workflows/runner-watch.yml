@@ -175,9 +175,14 @@ jobs:
           fi
 
           if [ "$OFFLINE" = true ]; then
+            # This used to end "Nothing to do to switch back; it returns by
+            # itself." True of the switch, not of the runners. On 2 November
+            # they had stopped for good, the message read as an all-clear, and
+            # nothing more was said for eight days. It now says what to check,
+            # and runner-still-offline.yml repeats it daily until they are back.
             {
               echo "went-offline=true"
-              echo "detail=CI has moved to GitHub-hosted runners on its own. Jobs already queued on the runner are still queued — cancel and re-run those. Nothing to do to switch back; it returns by itself."
+              echo "detail=CI has moved to GitHub-hosted runners, which bill by the minute. Queued jobs stay queued: cancel and re-run them. If the runners come back, CI follows them by itself. If they are not back within the hour, they need a person: <https://github.com/datumlabsio/actions/blob/main/docs/self-hosted-runners.md#if-it-is-on-fire|what to check>. A reminder follows every day until they are."
             } >> "$GITHUB_OUTPUT"
             echo "::warning::Runner offline. Every repo moved to ubuntu-latest."
           else
