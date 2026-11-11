@@ -28,6 +28,11 @@ A repo with its own version of any of these keeps its own. The default only fill
 
 **Not served anywhere.** These live here for this repo only, or as documentation:
 
+**If you are here because a check went red, start with**
+[`docs/datum-police.md`](docs/datum-police.md) — what runs, where to find
+the results, and what to do about a secret. It is written for everyone, not
+for whoever maintains this repo.
+
 - `CODEOWNERS` — GitHub reads this per repo. It cannot be inherited. Every repo needs its own; the convention is in [`docs/codeowners-conventions.md`](docs/codeowners-conventions.md).
 - `.github/workflows/ci.yml` — this repo's own CI. A thin caller: `docs-ci` for the prose, `workflows-ci` for the automation. It validates `default.json` on every pull request, lints the workflows, and confirms its own pins resolve — all of which used to be done by hand.
 - `.github/workflows/conformance-audit.yml` — the scheduled §12 audit. Report-only until B-30 settles which repos the standard binds. What to do when a finding lands: [`docs/conformance-drift.md`](docs/conformance-drift.md).
